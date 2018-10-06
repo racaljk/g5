@@ -1,8 +1,8 @@
 //===----------------------------------------------------------------------===//
-// golang specification can be found here: https://golang.org/ref/spe
+// golang specification can be found here: https://golang.org/ref/spec
 //
-// in development mode, i consider raise exception when met error , they will be
-// replaced with error stream later
+// in development mode, i consider raise runtime_error when met error , they
+// will be replaced with error stream later
 //===----------------------------------------------------------------------===//
 
 #include <algorithm>
@@ -107,33 +107,30 @@ enum Token {
 int line = 1, column = 1;
 
 tuple<Token, string> next(fstream& f) {
-    char c = f.peek();
-    auto isdelimiter = [](char c) {
-        return c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == EOF;
+    auto consumeAndPeek = [&]() {
+        f.get();
+        return f.peek();
     };
 
-    for (; c == ' ' || c == '\r' || c == '\t'; column++) {
-        f.get();
-        c = f.peek();
-    }
+    char c = f.peek();
 
-    for (; c == '\n'; line++, column = 0) {
+    for (; c == ' ' || c == '\r' || c == '\t' || c=='\n'; column++) {
         f.get();
         c = f.peek();
+        if (c == '\n') {
+            line++;
+            column = 1;
+        }
     }
 
     // identifier = letter { letter | unicode_digit } .
     if (isalpha(c) || c == '_') {
         string tempIdent;
-        while (!isdelimiter(c)) {
-            if (isalnum(c) || c == '_') {
-                tempIdent += c;
-                c == '\n' ? (line += 1, column = 0) : (column++);
-                f.get();
-                c = f.peek();
-            } else {
-                throw exception("invalid identifier name");
-            }
+        while (isalnum(c) || c == '_') {
+            tempIdent += c;
+            c == '\n' ? (line += 1, column = 0) : (column++);
+            f.get();
+            c = f.peek();
         }
 
         for (int i = 0; i < sizeof(keywords); i++)
@@ -156,10 +153,8 @@ tuple<Token, string> next(fstream& f) {
     // exponent  = ( "e" | "E" ) [ "+" | "-" ] decimals .
 
     // imaginary_lit = (decimals | float_lit) "i" .
-
-    if (isdigit(c)) {
+    if (isdigit(c) || c == '.') {
         string tempDigit;
-        // int_lit = octal_lit | hex_lit
         if (c == '0') {
             f.get();
             column++;
@@ -170,16 +165,11 @@ tuple<Token, string> next(fstream& f) {
                 column++;
                 tempDigit += c;
                 c = f.peek();
-                while (!isdelimiter(c)) {
-                    if (isdigit(c) || c >= 'a' && c <= 'f' ||
-                        c >= 'A' && c <= 'F') {
-                        f.get();
-                        column++;
-                        tempDigit += c;
-                        c = f.peek();
-                    } else {
-                        throw exception("invalid hexadecimal number");
-                    }
+                while (isdigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+                    f.get();
+                    column++;
+                    tempDigit += c;
+                    c = f.peek();
                 }
                 return make_tuple(LITERAL_INT, tempDigit);
             } else if (c >= '0' && c <= '7') {
@@ -187,30 +177,29 @@ tuple<Token, string> next(fstream& f) {
                 column++;
                 tempDigit += c;
                 c = f.peek();
-                while (!isdelimiter(c)) {
+                while ((c >= '0' && c <= '9') ||
+                       (c == '.' || c == 'e' ||
+                        c == 'E' || c == 'i') ) {
                     if (c >= '0' && c <= '7') {
                         f.get();
                         column++;
                         tempDigit += c;
                         c = f.peek();
-                    } else if (c == '8' || c == '9' || c=='.' || c=='e'||c=='E') {
-                        goto shall_float;
                     } else {
-                        throw exception("invalid hexadecimal or octal number");
+                        goto shall_float;
                     }
                 }
                 return make_tuple(LITERAL_INT, tempDigit);
             }
             goto shall_float;
-        } else {
+        } else{
             f.get();
             column++;
             tempDigit += c;
             c = f.peek();
-        shall_float:  // skip char consuming and appending since we did that
-                      // before jumping here;
+        shall_float:  // skip char consuming and appending since we did that before jumping here;
             bool hasDot = false, hasExponent = false;
-            while (!isdelimiter(c)) {
+            while ((c >= '0' && c <= '9') || c == '.' || c == 'e' || c =='E' || c == 'i'){
                 if (c >= '0' && c <= '9') {
                     f.get();
                     column++;
@@ -221,7 +210,7 @@ tuple<Token, string> next(fstream& f) {
                     column++;
                     tempDigit += c;
                     c = f.peek();
-                } else if ((c == 'e' && !hasExponent) ||(c == 'E' && !hasExponent)) {
+                } else if ((c == 'e' && !hasExponent) || (c == 'E' && !hasExponent)) {
                     hasExponent = true;
                     f.get();
                     column++;
@@ -232,50 +221,18 @@ tuple<Token, string> next(fstream& f) {
                         column++;
                         tempDigit += c;
                         c = f.peek();
-                    } 
+                    }
                 } else {
-                    throw exception("invalid integer number");
+                    f.get();
+                    column++;
+                    tempDigit += c;
+                    return make_tuple(LITERAL_IMG, tempDigit);
                 }
             }
             return make_tuple(LITERAL_INT, tempDigit);
         }
-    } else if (c == '.') {
-        string tempDigit;
-        f.get();
-        column++;
-        tempDigit += c;
-        c = f.peek();
-        bool hasDot = false, hasExponent = false;
-        while (!isdelimiter(c)) {
-            if (c >= '0' && c <= '9') {
-                f.get();
-                column++;
-                tempDigit += c;
-                c = f.peek();
-            } else if (c == '.' && !hasDot) {
-                f.get();
-                column++;
-                tempDigit += c;
-                c = f.peek();
-            } else if ((c == 'e' && !hasExponent) || (c == 'E' && !hasExponent)) {
-                hasExponent = true;
-                f.get();
-                column++;
-                tempDigit += c;
-                c = f.peek();
-                if (c == '+' || c == '-') {
-                    f.get();
-                    column++;
-                    tempDigit += c;
-                    c = f.peek();
-                }
-            } else {
-                throw exception("invalid integer number");
-            }
-            
-        }
-        return make_tuple(LITERAL_INT, tempDigit);
     }
+    return make_tuple(TK_ID,"not implemented yet");
 }
 
 void tokenize(fstream& f) {

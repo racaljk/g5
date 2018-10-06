@@ -21,4 +21,12 @@ continue     for          import       return       returns var this____name_is_
 6.67428e-11
 1E6
 .25
-.12345E+5
+.12345E+5 0i
+011i
+0.i
+2.71828i
+1.e+0i
+6.67428e-11i
+1E6i
+.25i
+.12345E+5i
