@@ -5,3 +5,4 @@ __ps: code commit might be frequent, you can star it rather watching.__
 
 # resource 
 + [golang spec](https://golang.org/ref/spec)
++ [c++ quick overview](https://github.com/changkun/modern-cpp-tutorial)
