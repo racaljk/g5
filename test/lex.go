@@ -30,3 +30,13 @@ continue     for          import       return       returns var this____name_is_
 1E6i
 .25i
 .12345E+5i
+
+'a'
+'\t'
+
+`abc`          
+`\n
+\n`              
+"\n"
+"\""              
+"Hello, world!\n"

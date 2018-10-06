@@ -107,14 +107,9 @@ enum Token {
 int line = 1, column = 1;
 
 tuple<Token, string> next(fstream& f) {
-    auto consumeAndPeek = [&]() {
-        f.get();
-        return f.peek();
-    };
-
     char c = f.peek();
 
-    for (; c == ' ' || c == '\r' || c == '\t' || c=='\n'; column++) {
+    for (; c == ' ' || c == '\r' || c == '\t' || c == '\n'; column++) {
         f.get();
         c = f.peek();
         if (c == '\n') {
@@ -123,22 +118,30 @@ tuple<Token, string> next(fstream& f) {
         }
     }
 
+    string lexeme;
+    auto consumePeek = [&](char& c) {
+        f.get();
+        column++;
+        char oc = c;
+        c = f.peek();
+        return oc;
+    };
+
     // identifier = letter { letter | unicode_digit } .
     if (isalpha(c) || c == '_') {
-        string tempIdent;
         while (isalnum(c) || c == '_') {
-            tempIdent += c;
+            lexeme += c;
             c == '\n' ? (line += 1, column = 0) : (column++);
             f.get();
             c = f.peek();
         }
 
         for (int i = 0; i < sizeof(keywords); i++)
-            if (keywords[i] == tempIdent) {
-                return make_tuple(static_cast<Token>(i), tempIdent);
+            if (keywords[i] == lexeme) {
+                return make_tuple(static_cast<Token>(i), lexeme);
             }
 
-        return make_tuple(TK_ID, tempIdent);
+        return make_tuple(TK_ID, lexeme);
     }
 
     // int_lit     = decimal_lit | octal_lit | hex_lit .
@@ -154,92 +157,120 @@ tuple<Token, string> next(fstream& f) {
 
     // imaginary_lit = (decimals | float_lit) "i" .
     if (isdigit(c) || c == '.') {
-        string tempDigit;
         if (c == '0') {
-            f.get();
-            column++;
-            tempDigit += c;
-            c = f.peek();
+            lexeme += consumePeek(c);
             if (c == 'x' || c == 'X') {
-                f.get();
-                column++;
-                tempDigit += c;
-                c = f.peek();
-                while (isdigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
-                    f.get();
-                    column++;
-                    tempDigit += c;
-                    c = f.peek();
+                lexeme += consumePeek(c);
+                while (isdigit(c) || c >= 'a' && c <= 'f' ||
+                       c >= 'A' && c <= 'F') {
+                    lexeme += consumePeek(c);
                 }
-                return make_tuple(LITERAL_INT, tempDigit);
+                return make_tuple(LITERAL_INT, lexeme);
             } else if (c >= '0' && c <= '7') {
-                f.get();
-                column++;
-                tempDigit += c;
-                c = f.peek();
+                lexeme += consumePeek(c);
                 while ((c >= '0' && c <= '9') ||
-                       (c == '.' || c == 'e' ||
-                        c == 'E' || c == 'i') ) {
+                       (c == '.' || c == 'e' || c == 'E' || c == 'i')) {
                     if (c >= '0' && c <= '7') {
-                        f.get();
-                        column++;
-                        tempDigit += c;
-                        c = f.peek();
+                        lexeme += consumePeek(c);
                     } else {
                         goto shall_float;
                     }
                 }
-                return make_tuple(LITERAL_INT, tempDigit);
+                return make_tuple(LITERAL_INT, lexeme);
             }
             goto shall_float;
-        } else{
-            f.get();
-            column++;
-            tempDigit += c;
-            c = f.peek();
-        shall_float:  // skip char consuming and appending since we did that before jumping here;
+        } else {
+            lexeme += consumePeek(c);
+        shall_float:  // skip char consuming and appending since we did that
+                      // before jumping here;
             bool hasDot = false, hasExponent = false;
-            while ((c >= '0' && c <= '9') || c == '.' || c == 'e' || c =='E' || c == 'i'){
+            while ((c >= '0' && c <= '9') || c == '.' || c == 'e' || c == 'E' ||
+                   c == 'i') {
                 if (c >= '0' && c <= '9') {
-                    f.get();
-                    column++;
-                    tempDigit += c;
-                    c = f.peek();
+                    lexeme += consumePeek(c);
                 } else if (c == '.' && !hasDot) {
-                    f.get();
-                    column++;
-                    tempDigit += c;
-                    c = f.peek();
-                } else if ((c == 'e' && !hasExponent) || (c == 'E' && !hasExponent)) {
+                    lexeme += consumePeek(c);
+                } else if ((c == 'e' && !hasExponent) ||
+                           (c == 'E' && !hasExponent)) {
                     hasExponent = true;
-                    f.get();
-                    column++;
-                    tempDigit += c;
-                    c = f.peek();
+                    lexeme += consumePeek(c);
                     if (c == '+' || c == '-') {
-                        f.get();
-                        column++;
-                        tempDigit += c;
-                        c = f.peek();
+                        lexeme += consumePeek(c);
                     }
                 } else {
                     f.get();
                     column++;
-                    tempDigit += c;
-                    return make_tuple(LITERAL_IMG, tempDigit);
+                    lexeme += c;
+                    return make_tuple(LITERAL_IMG, lexeme);
                 }
             }
-            return make_tuple(LITERAL_INT, tempDigit);
+            return make_tuple(LITERAL_INT, lexeme);
         }
     }
-    return make_tuple(TK_ID,"not implemented yet");
+
+    //! NOT FULLY SUPPORT UNICODE RELATED LITERALS
+
+    // rune_lit         = "'" ( unicode_value | byte_value ) "'" .
+    // unicode_value    = unicode_char | little_u_value | big_u_value |
+    // escaped_char . byte_value       = octal_byte_value | hex_byte_value .
+    // octal_byte_value = `\` octal_digit octal_digit octal_digit .
+    // hex_byte_value   = `\` "x" hex_digit hex_digit .
+    // little_u_value   = `\` "u" hex_digit hex_digit hex_digit hex_digit .
+    // big_u_value      = `\` "U" hex_digit hex_digit hex_digit hex_digit
+    //                            hex_digit hex_digit hex_digit hex_digit .
+    // escaped_char     = `\` ( "a" | "b" | "f" | "n" | "r" | "t" | "v" | `\` |
+    // "'" | `"` ) .
+    if (c == '\'') {
+        lexeme += consumePeek(c);
+        if (c == '\\') {
+            lexeme += consumePeek(c);
+            lexeme += consumePeek(c);
+        } else {
+            lexeme += consumePeek(c);
+        }
+
+        if (c != '\'') {
+            throw runtime_error(
+                "illegal rune at least in current implementation of g8");
+        }
+        lexeme += consumePeek(c);
+        return make_tuple(LITERAL_RUNE, lexeme);
+    }
+
+    // string_lit             = raw_string_lit | interpreted_string_lit .
+    // raw_string_lit         = "`" { unicode_char | newline } "`" .
+    // interpreted_string_lit = `"` { unicode_value | byte_value } `"` .
+    if (c == '`') {
+        do {
+            lexeme += consumePeek(c);
+        } while (f.good() && c!='`');
+        if (c != '`') {
+            throw runtime_error("raw string literal does not have a closed symbol \"`\"");
+        }
+        lexeme += consumePeek(c);
+        return make_tuple(LITERAL_STR, lexeme);
+    } else if (c == '"') {
+        do {
+            lexeme += consumePeek(c);
+            if (c == '\\') {
+                lexeme += consumePeek(c);
+                lexeme += consumePeek(c);
+            }
+        } while (f.good() && c != '\n' && c != '\r' && c != '"');
+        if (c != '"') {
+            throw runtime_error("string literal does not have a closed symbol \"\"\"");
+        }
+        lexeme += consumePeek(c);
+        return make_tuple(LITERAL_STR, lexeme);
+    }
+
+    return make_tuple(TK_ID, "not implemented yet");
 }
 
 void tokenize(fstream& f) {
     while (f.good()) {
         auto [token, lexeme] = next(f);
-        fprintf(stdout, "<%d,\"%s\",%d,%d>\n", token, lexeme.c_str(), line,
-                column);
+        fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
     }
 }
 
