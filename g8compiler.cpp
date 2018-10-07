@@ -101,7 +101,8 @@ enum Token {
     LITERAL_FLOAT,
     LITERAL_IMG,
     LITERAL_RUNE,
-    LITERAL_STR
+    LITERAL_STR,
+    TK_EOF
 };
 
 int line = 1, column = 1;
@@ -118,6 +119,9 @@ skip_comment_and_find_next:
             line++;
             column = 1;
         }
+    }
+    if (f.eof()) {
+        return make_tuple(TK_EOF,"");
     }
 
     string lexeme;
@@ -181,40 +185,48 @@ skip_comment_and_find_next:
                 return make_tuple(LITERAL_INT, lexeme);
             }
             goto shall_float;
-        } else {
-            lexeme += consumePeek(c);
+        } else {  // 1-9 or .
+
             if (c == '.') {
                 lexeme += consumePeek(c);
                 if (c == '.') {
-                    lexeme = consumePeek(c);
-                    return make_tuple(OP_VARIADIC, lexeme);
-                }
-            } else {
-shall_float:  // skip char consuming and appending since we did that
-                          // before jumping here;
-                bool hasDot = false, hasExponent = false;
-                while ((c >= '0' && c <= '9') || c == '.' || c == 'e' ||
-                       c == 'E' || c == 'i') {
-                    if (c >= '0' && c <= '9') {
+                    lexeme += consumePeek(c);
+                    if (c == '.') {
                         lexeme += consumePeek(c);
-                    } else if (c == '.' && !hasDot) {
-                        lexeme += consumePeek(c);
-                    } else if ((c == 'e' && !hasExponent) ||
-                               (c == 'E' && !hasExponent)) {
-                        hasExponent = true;
-                        lexeme += consumePeek(c);
-                        if (c == '+' || c == '-') {
-                            lexeme += consumePeek(c);
-                        }
+                        return make_tuple(OP_VARIADIC, lexeme);
                     } else {
-                        f.get();
-                        column++;
-                        lexeme += c;
-                        return make_tuple(LITERAL_IMG, lexeme);
+                        throw runtime_error(
+                            "expect variadic notation(...) but got .." + c);
                     }
                 }
-                return make_tuple(LITERAL_INT, lexeme);
+                goto shall_float;
             }
+
+            lexeme += consumePeek(c);
+        shall_float:  // skip char consuming and appending since we did that
+                      // before jumping here;
+            bool hasDot = false, hasExponent = false;
+            while ((c >= '0' && c <= '9') || c == '.' || c == 'e' || c == 'E' ||
+                   c == 'i') {
+                if (c >= '0' && c <= '9') {
+                    lexeme += consumePeek(c);
+                } else if (c == '.' && !hasDot) {
+                    lexeme += consumePeek(c);
+                } else if ((c == 'e' && !hasExponent) ||
+                           (c == 'E' && !hasExponent)) {
+                    hasExponent = true;
+                    lexeme += consumePeek(c);
+                    if (c == '+' || c == '-') {
+                        lexeme += consumePeek(c);
+                    }
+                } else {
+                    f.get();
+                    column++;
+                    lexeme += c;
+                    return make_tuple(LITERAL_IMG, lexeme);
+                }
+            }
+            return make_tuple(LITERAL_INT, lexeme);
         }
     }
 
@@ -298,7 +310,10 @@ shall_float:  // skip char consuming and appending since we did that
                 return make_tuple(OP_AND, lexeme);
             } else if (c == '^') {
                 lexeme += consumePeek(c);
-                if (c == '=') return make_tuple(OP_ANDXORASSIGN, lexeme);
+                if (c == '=') {
+                    lexeme += consumePeek(c);
+                    return make_tuple(OP_ANDXORASSIGN, lexeme);
+                }
                 return make_tuple(OP_ANDXOR, lexeme);
             }
             return make_tuple(OP_BITAND, lexeme);
@@ -390,28 +405,32 @@ shall_float:  // skip char consuming and appending since we did that
         case '}':
             lexeme += consumePeek(c);
             return make_tuple(OP_RBRACE, lexeme);
-        case '/':  // /  /= // /*...*/
-            lexeme += consumePeek(c);
+        case '/': {  // /  /= // /*...*/
+            char pending = consumePeek(c);
             if (c == '=') {
+                lexeme += pending;
                 lexeme += consumePeek(c);
                 return make_tuple(OP_DIVASSIGN, lexeme);
             } else if (c == '/') {
                 do {
-                    c = consumePeek(c);
-                } while (f.good() && (c != '\n' || c != '\r'));
+                    consumePeek(c);
+                } while (f.good() && (c != '\n' && c != '\r'));
                 goto skip_comment_and_find_next;
             } else if (c == '*') {
                 do {
-                    c = consumePeek(c);
+                    consumePeek(c);
                     if (c == '*') {
-                        c = consumePeek(c);
+                        consumePeek(c);
                         if (c == '/') {
+                            consumePeek(c);
                             goto skip_comment_and_find_next;
                         }
                     }
                 } while (f.good());
             }
+            lexeme += pending;
             return make_tuple(OP_DIV, lexeme);
+        }
         case ':':  // :=
             lexeme += consumePeek(c);
             if (c == '=') {
@@ -425,29 +444,26 @@ shall_float:  // skip char consuming and appending since we did that
         case ';':
             lexeme += consumePeek(c);
             return make_tuple(OP_SEMI, lexeme);
-        case '%'://%  %=
+        case '%':  //%  %=
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
                 return make_tuple(OP_MODASSIGN, lexeme);
             }
             return make_tuple(OP_MOD, lexeme);
-        //case '.' has already checked
+            // case '.' has already checked
     }
 
-   throw runtime_error("illegal token in source file");
+    throw runtime_error("illegal token in source file");
 }
 
-void tokenize(fstream& f) {
+
+int main() {
+    fstream f("regexp.go", ios::binary | ios::in);
     while (f.good()) {
         auto [token, lexeme] = next(f);
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
     }
-}
-
-int main() {
-    fstream f("lex.go", ios::binary | ios::in);
-    tokenize(f);
     system("pause");
     return 0;
 }

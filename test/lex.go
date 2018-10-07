@@ -17,7 +17,7 @@ continue     for          import       return       returns var this____name_is_
 72.40
 072.40 72.40
 2.71828
-1.e+0
+1.e+0+
 6.67428e-11
 1E6
 .25
@@ -29,8 +29,14 @@ continue     for          import       return       returns var this____name_is_
 6.67428e-11i
 1E6i
 .25i
-.12345E+5i
-
+.12345E+5i// this is a comment
+/*
+a
+multi
+line
+comment
+represented
+*/
 'a'
 '\t'
 
@@ -40,3 +46,10 @@ continue     for          import       return       returns var this____name_is_
 "\n"
 "\""              
 "Hello, world!\n"
+
++    &     +=    &=     &&    ==    !=    (    )
+-    |     -=    |=     ||    <     <=    [    ]
+*    ^     *=    ^=     <-    >     >=    {    }
+/    <<    /=    <<=    ++    =     :=    ,    ;
+%    >>    %=    >>=    --    !     ...   .    :
+     &^          &^=
