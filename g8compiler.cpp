@@ -172,12 +172,17 @@ skip_comment_and_find_next:
         if (c == '\\') {
             lexeme += consumePeek(c);
 
-            if (c == 'U' || c == 'u') {
+            if (c == 'U' || c == 'u' || c=='x' || c=='X') {
                 do {
                     lexeme += consumePeek(c);
                 } while (isdigit(c) || (c >= 'a' && c <= 'f') ||
                          (c >= 'A' && c <= 'F'));
-            } else {//\t \n \a
+            } else if (c >= '0' && c <= '7') {
+                do {
+                    lexeme += consumePeek(c);
+                } while (c >= '0' && c <= '7');
+            } 
+            else {//\t \n \a
                 lexeme += consumePeek(c);
             }
             
@@ -393,7 +398,7 @@ skip_comment_and_find_next:
 
 
 int main() {
-    fstream f("entity.go", ios::binary | ios::in);
+    fstream f("lex.go", ios::binary | ios::in);
     while (f.good()) {
         auto [token, lexeme] = next(f);
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
