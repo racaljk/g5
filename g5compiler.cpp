@@ -410,6 +410,6 @@ int main() {
         auto [token, lexeme] = next(f);
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
     }
-    system("pause");
+    getchar();
     return 0;
 }
