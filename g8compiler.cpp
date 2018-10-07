@@ -22,87 +22,13 @@ string keywords[] = {"break",    "default",     "func",   "interface", "select",
                      "chan",     "else",        "goto",   "package",   "switch",
                      "const",    "fallthrough", "if",     "range",     "type",
                      "continue", "for",         "import", "return",    "var"};
-
 enum Token {
-    KW_break,
-    KW_default,
-    KW_func,
-    KW_interface,
-    KW_select,
-    KW_case,
-    KW_defer,
-    KW_go,
-    KW_map,
-    KW_struct,
-    KW_chan,
-    KW_else,
-    KW_goto,
-    KW_package,
-    KW_switch,
-    KW_const,
-    KW_fallthrough,
-    KW_if,
-    KW_range,
-    KW_type,
-    KW_continue,
-    KW_for,
-    KW_import,
-    KW_return,
-    KW_var,
-    OP_ADD,
-    OP_BITAND,
-    OP_ADDASSIGN,
-    OP_BITANDASSIGN,
-    OP_AND,
-    OP_EQ,
-    OP_NE,
-    OP_LPAREN,
-    OP_RPAREN,
-    OP_SUB,
-    OP_BITOR,
-    OP_SUBASSIGN,
-    OP_BITORASSIGN,
-    OP_OR,
-    OP_LT,
-    OP_LE,
-    OP_LBRACKET,
-    OP_RBRACKET,
-    OP_MUL,
-    OP_XOR,
-    OP_MULASSIGN,
-    OP_BITXORASSIGN,
-    OP_CHAN,
-    OP_GT,
-    OP_GE,
-    OP_LBRACE,
-    OP_RBRACE,
-    OP_DIV,
-    OP_LSHIFT,
-    OP_DIVASSIGN,
-    OP_LSFTASSIGN,
-    OP_INC,
-    OP_ASSIGN,
-    OP_SHORTASSIGN,
-    OP_COMMA,
-    OP_SEMI,
-    OP_MOD,
-    OP_RSHIFT,
-    OP_MODASSIGN,
-    OP_RSFTASSIGN,
-    OP_DEC,
-    OP_NOT,
-    OP_VARIADIC,
-    OP_DOT,
-    OP_COLON,
-    OP_ANDXOR,
-    OP_ANDXORASSIGN,
-    TK_ID,
-    LITERAL_INT,
-    LITERAL_FLOAT,
-    LITERAL_IMG,
-    LITERAL_RUNE,
-    LITERAL_STR,
-    TK_EOF
+    KW_break,KW_default,KW_func,KW_interface,KW_select,KW_case,KW_defer,KW_go,KW_map,KW_struct,KW_chan,KW_else,KW_goto,KW_package,KW_switch,
+    KW_const,KW_fallthrough,KW_if,KW_range,KW_type,KW_continue,KW_for,KW_import,KW_return,KW_var,OP_ADD,OP_BITAND,OP_ADDASSIGN,OP_BITANDASSIGN,
+    OP_AND,OP_EQ,OP_NE,OP_LPAREN,OP_RPAREN,OP_SUB,OP_BITOR,OP_SUBASSIGN,OP_BITORASSIGN,OP_OR,OP_LT,OP_LE,OP_LBRACKET,OP_RBRACKET,OP_MUL,OP_XOR,
+    OP_MULASSIGN,OP_BITXORASSIGN,OP_CHAN,OP_GT,OP_GE,OP_LBRACE,OP_RBRACE,OP_DIV,OP_LSHIFT,OP_DIVASSIGN,OP_LSFTASSIGN,OP_INC,OP_ASSIGN,
+    OP_SHORTASSIGN,OP_COMMA,OP_SEMI,OP_MOD,OP_RSHIFT,OP_MODASSIGN,OP_RSFTASSIGN,OP_DEC,OP_NOT,OP_VARIADIC,OP_DOT,OP_COLON,OP_ANDXOR,
+    OP_ANDXORASSIGN,TK_ID,LITERAL_INT,LITERAL_FLOAT,LITERAL_IMG,LITERAL_RUNE,LITERAL_STR,TK_EOF
 };
 
 int line = 1, column = 1;
@@ -166,11 +92,10 @@ skip_comment_and_find_next:
         if (c == '0') {
             lexeme += consumePeek(c);
             if (c == 'x' || c == 'X') {
-                lexeme += consumePeek(c);
-                while (isdigit(c) || c >= 'a' && c <= 'f' ||
-                       c >= 'A' && c <= 'F') {
+                do {
                     lexeme += consumePeek(c);
-                }
+                }while (isdigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F');
+
                 return make_tuple(LITERAL_INT, lexeme);
             } else if (c >= '0' && c <= '7') {
                 lexeme += consumePeek(c);
@@ -246,7 +171,16 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         if (c == '\\') {
             lexeme += consumePeek(c);
-            lexeme += consumePeek(c);
+
+            if (c == 'U' || c == 'u') {
+                do {
+                    lexeme += consumePeek(c);
+                } while (isdigit(c) || (c >= 'a' && c <= 'f') ||
+                         (c >= 'A' && c <= 'F'));
+            } else {//\t \n \a
+                lexeme += consumePeek(c);
+            }
+            
         } else {
             lexeme += consumePeek(c);
         }
@@ -459,7 +393,7 @@ skip_comment_and_find_next:
 
 
 int main() {
-    fstream f("regexp.go", ios::binary | ios::in);
+    fstream f("entity.go", ios::binary | ios::in);
     while (f.good()) {
         auto [token, lexeme] = next(f);
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
