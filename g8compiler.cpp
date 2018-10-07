@@ -52,7 +52,7 @@ enum Token {
     OP_ADD,
     OP_BITAND,
     OP_ADDASSIGN,
-    P_BITANDASSIGN,
+    OP_BITANDASSIGN,
     OP_AND,
     OP_EQ,
     OP_NE,
@@ -70,11 +70,11 @@ enum Token {
     OP_MUL,
     OP_XOR,
     OP_MULASSIGN,
-    OP_XORASSIGN,
+    OP_BITXORASSIGN,
     OP_CHAN,
     OP_GT,
     OP_GE,
-    OP_LBRACK,
+    OP_LBRACE,
     OP_RBRACE,
     OP_DIV,
     OP_LSHIFT,
@@ -94,8 +94,8 @@ enum Token {
     OP_VARIADIC,
     OP_DOT,
     OP_COLON,
-    OP_ANDNOT,
-    OP_ANDNOTASSIGN,
+    OP_ANDXOR,
+    OP_ANDXORASSIGN,
     TK_ID,
     LITERAL_INT,
     LITERAL_FLOAT,
@@ -108,6 +108,8 @@ int line = 1, column = 1;
 
 tuple<Token, string> next(fstream& f) {
     char c = f.peek();
+
+skip_comment_and_find_next:
 
     for (; c == ' ' || c == '\r' || c == '\t' || c == '\n'; column++) {
         f.get();
@@ -181,30 +183,38 @@ tuple<Token, string> next(fstream& f) {
             goto shall_float;
         } else {
             lexeme += consumePeek(c);
-        shall_float:  // skip char consuming and appending since we did that
-                      // before jumping here;
-            bool hasDot = false, hasExponent = false;
-            while ((c >= '0' && c <= '9') || c == '.' || c == 'e' || c == 'E' ||
-                   c == 'i') {
-                if (c >= '0' && c <= '9') {
-                    lexeme += consumePeek(c);
-                } else if (c == '.' && !hasDot) {
-                    lexeme += consumePeek(c);
-                } else if ((c == 'e' && !hasExponent) ||
-                           (c == 'E' && !hasExponent)) {
-                    hasExponent = true;
-                    lexeme += consumePeek(c);
-                    if (c == '+' || c == '-') {
-                        lexeme += consumePeek(c);
-                    }
-                } else {
-                    f.get();
-                    column++;
-                    lexeme += c;
-                    return make_tuple(LITERAL_IMG, lexeme);
+            if (c == '.') {
+                lexeme += consumePeek(c);
+                if (c == '.') {
+                    lexeme = consumePeek(c);
+                    return make_tuple(OP_VARIADIC, lexeme);
                 }
+            } else {
+shall_float:  // skip char consuming and appending since we did that
+                          // before jumping here;
+                bool hasDot = false, hasExponent = false;
+                while ((c >= '0' && c <= '9') || c == '.' || c == 'e' ||
+                       c == 'E' || c == 'i') {
+                    if (c >= '0' && c <= '9') {
+                        lexeme += consumePeek(c);
+                    } else if (c == '.' && !hasDot) {
+                        lexeme += consumePeek(c);
+                    } else if ((c == 'e' && !hasExponent) ||
+                               (c == 'E' && !hasExponent)) {
+                        hasExponent = true;
+                        lexeme += consumePeek(c);
+                        if (c == '+' || c == '-') {
+                            lexeme += consumePeek(c);
+                        }
+                    } else {
+                        f.get();
+                        column++;
+                        lexeme += c;
+                        return make_tuple(LITERAL_IMG, lexeme);
+                    }
+                }
+                return make_tuple(LITERAL_INT, lexeme);
             }
-            return make_tuple(LITERAL_INT, lexeme);
         }
     }
 
@@ -243,9 +253,10 @@ tuple<Token, string> next(fstream& f) {
     if (c == '`') {
         do {
             lexeme += consumePeek(c);
-        } while (f.good() && c!='`');
+        } while (f.good() && c != '`');
         if (c != '`') {
-            throw runtime_error("raw string literal does not have a closed symbol \"`\"");
+            throw runtime_error(
+                "raw string literal does not have a closed symbol \"`\"");
         }
         lexeme += consumePeek(c);
         return make_tuple(LITERAL_STR, lexeme);
@@ -256,15 +267,175 @@ tuple<Token, string> next(fstream& f) {
                 lexeme += consumePeek(c);
                 lexeme += consumePeek(c);
             }
-        } while (f.good() && c != '\n' && c != '\r' && c != '"');
+        } while (f.good() && (c != '\n' && c != '\r' && c != '"'));
         if (c != '"') {
-            throw runtime_error("string literal does not have a closed symbol \"\"\"");
+            throw runtime_error(
+                "string literal does not have a closed symbol \"\"\"");
         }
         lexeme += consumePeek(c);
         return make_tuple(LITERAL_STR, lexeme);
     }
 
-    return make_tuple(TK_ID, "not implemented yet");
+    // operators
+    switch (c) {
+        case '+':  //+  += ++
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_ADDASSIGN, lexeme);
+            } else if (c == '+') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_INC, lexeme);
+            }
+            return make_tuple(OP_ADD, lexeme);
+        case '&':  //&  &=  &&  &^  &^=
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_BITANDASSIGN, lexeme);
+            } else if (c == '&') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_AND, lexeme);
+            } else if (c == '^') {
+                lexeme += consumePeek(c);
+                if (c == '=') return make_tuple(OP_ANDXORASSIGN, lexeme);
+                return make_tuple(OP_ANDXOR, lexeme);
+            }
+            return make_tuple(OP_BITAND, lexeme);
+        case '=':  //=  ==
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                return make_tuple(OP_EQ, lexeme);
+            }
+            return make_tuple(OP_ASSIGN, lexeme);
+        case '!':  //!  !=
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_NE, lexeme);
+            }
+            return make_tuple(OP_NOT, lexeme);
+        case '(':
+            lexeme += consumePeek(c);
+            return make_tuple(OP_LPAREN, lexeme);
+        case ')':
+            lexeme += consumePeek(c);
+            return make_tuple(OP_RPAREN, lexeme);
+        case '-':  //-  -= --
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_SUBASSIGN, lexeme);
+            } else if (c == '-') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_DEC, lexeme);
+            }
+            return make_tuple(OP_SUB, lexeme);
+        case '|':  //|  |=  ||
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_BITORASSIGN, lexeme);
+            } else if (c == '|') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_OR, lexeme);
+            }
+            return make_tuple(OP_BITOR, lexeme);
+        case '<':  //<  <=  <- <<  <<=
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_LE, lexeme);
+            } else if (c == '-') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_CHAN, lexeme);
+            } else if (c == '<') {
+                lexeme += consumePeek(c);
+                if (c == '=') return make_tuple(OP_LSFTASSIGN, lexeme);
+                return make_tuple(OP_LSHIFT, lexeme);
+            }
+            return make_tuple(OP_LT, lexeme);
+        case '[':
+            lexeme += consumePeek(c);
+            return make_tuple(OP_LBRACKET, lexeme);
+        case ']':
+            lexeme += consumePeek(c);
+            return make_tuple(OP_RBRACKET, lexeme);
+        case '*':  //*  *=
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                return make_tuple(OP_MULASSIGN, lexeme);
+            }
+            return make_tuple(OP_MUL, lexeme);
+        case '^':  //^  ^=
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                return make_tuple(OP_BITXORASSIGN, lexeme);
+            }
+            return make_tuple(OP_XOR, lexeme);
+        case '>':  //>  >=  >>  >>=
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_GE, lexeme);
+            } else if (c == '>') {
+                lexeme += consumePeek(c);
+                if (c == '=') return make_tuple(OP_RSFTASSIGN, lexeme);
+                return make_tuple(OP_RSHIFT, lexeme);
+            }
+            return make_tuple(OP_GT, lexeme);
+        case '{':
+            lexeme += consumePeek(c);
+            return make_tuple(OP_LBRACE, lexeme);
+        case '}':
+            lexeme += consumePeek(c);
+            return make_tuple(OP_RBRACE, lexeme);
+        case '/':  // /  /= // /*...*/
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_DIVASSIGN, lexeme);
+            } else if (c == '/') {
+                do {
+                    c = consumePeek(c);
+                } while (f.good() && (c != '\n' || c != '\r'));
+                goto skip_comment_and_find_next;
+            } else if (c == '*') {
+                do {
+                    c = consumePeek(c);
+                    if (c == '*') {
+                        c = consumePeek(c);
+                        if (c == '/') {
+                            goto skip_comment_and_find_next;
+                        }
+                    }
+                } while (f.good());
+            }
+            return make_tuple(OP_DIV, lexeme);
+        case ':':  // :=
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_SHORTASSIGN, lexeme);
+            }
+            return make_tuple(OP_COLON, lexeme);
+        case ',':
+            lexeme += consumePeek(c);
+            return make_tuple(OP_COMMA, lexeme);
+        case ';':
+            lexeme += consumePeek(c);
+            return make_tuple(OP_SEMI, lexeme);
+        case '%'://%  %=
+            lexeme += consumePeek(c);
+            if (c == '=') {
+                lexeme += consumePeek(c);
+                return make_tuple(OP_MODASSIGN, lexeme);
+            }
+            return make_tuple(OP_MOD, lexeme);
+        //case '.' has already checked
+    }
+
+   throw runtime_error("illegal token in source file");
 }
 
 void tokenize(fstream& f) {
