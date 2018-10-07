@@ -186,8 +186,11 @@ shall_float:  // skip char consuming and appending since we did that before jump
                     lexeme += consumePeek(c);
                 } while (c >= '0' && c <= '7');
             } 
-            else {//\t \n \a
+            else if(c=='a'||c=='b'||c=='f'||c=='n'||c=='r'||c=='t'||c=='v'||c=='\\'||c=='\''||c=='"'){
                 lexeme += consumePeek(c);
+            }
+            else {
+                throw runtime_error("illegal rune");
             }
             
         } else {
@@ -402,7 +405,7 @@ shall_float:  // skip char consuming and appending since we did that before jump
 
 
 int main() {
-    fstream f("lex.go", ios::binary | ios::in);
+    fstream f("format.go", ios::binary | ios::in);
     while (f.good()) {
         auto [token, lexeme] = next(f);
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
