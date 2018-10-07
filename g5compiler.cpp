@@ -16,14 +16,29 @@
 #include <functional>
 #include <string>
 #include <vector>
-
+#include <tuple>
+#include <map>
+#define _G5_DEBUG
 using namespace std;
+
+//===----------------------------------------------------------------------===//
+// global datas
+//===----------------------------------------------------------------------===//
+
+static int line = 1, column = 1;
+static map<long, map<string, string>> ast;
+
+//===----------------------------------------------------------------------===//
+// various declarations 
+//===----------------------------------------------------------------------===//
+
 
 string keywords[] = {"break",    "default",     "func",   "interface", "select",
                      "case",     "defer",       "go",     "map",       "struct",
                      "chan",     "else",        "goto",   "package",   "switch",
                      "const",    "fallthrough", "if",     "range",     "type",
                      "continue", "for",         "import", "return",    "var"};
+
 enum Token {
     KW_break,KW_default,KW_func,KW_interface,KW_select,KW_case,KW_defer,KW_go,KW_map,KW_struct,KW_chan,KW_else,KW_goto,KW_package,KW_switch,
     KW_const,KW_fallthrough,KW_if,KW_range,KW_type,KW_continue,KW_for,KW_import,KW_return,KW_var,OP_ADD,OP_BITAND,OP_ADDASSIGN,OP_BITANDASSIGN,
@@ -33,7 +48,9 @@ enum Token {
     OP_ANDXORASSIGN,TK_ID,LITERAL_INT,LITERAL_FLOAT,LITERAL_IMG,LITERAL_RUNE,LITERAL_STR,TK_EOF
 };
 
-int line = 1, column = 1;
+//===----------------------------------------------------------------------===//
+// give me 5, I'll give you a runnable golang back
+//===----------------------------------------------------------------------===//
 
 tuple<Token, string> next(fstream& f) {
     char c = f.peek();
@@ -403,13 +420,45 @@ shall_float:  // skip char consuming and appending since we did that before jump
     throw runtime_error("illegal token in source file");
 }
 
+void parse(const string & filename) {
+    fstream f(filename, ios::binary | ios::in);
+    // SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
+    // PackageClause  = "package" PackageName .
+    // PackageName = identifier .
+ 
+    auto parserPackage = [&]() {
+        if (auto[token, lexeme] = next(f); get<0>(next(f)) != KW_package) {
+            throw runtime_error("a go source file should always start with \"package\" besides meanlessing chars");
+        }
+        
+        if (auto[token, lexeme] = next(f); token == TK_ID) {
+            
+        }
+        else {
+            throw runtime_error("expect an identifier after package keyword\n");
+        }
+    };  
+}
+
+
+
+void emit() {}
 
 int main() {
-    fstream f("format.go", ios::binary | ios::in);
+    const string filename = "b.go";
+    //printLex(filename);
+    parse(filename);
+    getchar();
+    return 0;
+}
+
+//===----------------------------------------------------------------------===//
+// debug auxiliary functions, they are not part of 5 functions
+//===----------------------------------------------------------------------===//
+void printLex(const string & filename) {
+    fstream f(filename, ios::binary | ios::in);
     while (f.good()) {
         auto [token, lexeme] = next(f);
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
     }
-    getchar();
-    return 0;
 }
