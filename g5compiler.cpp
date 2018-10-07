@@ -3,6 +3,8 @@
 //
 // in development mode, i consider raise runtime_error when met error , they
 // will be replaced with error stream later
+//
+// Written by racaljk@github<1948638989@qq.com>
 //===----------------------------------------------------------------------===//
 
 #include <algorithm>
@@ -68,7 +70,7 @@ skip_comment_and_find_next:
             c = f.peek();
         }
 
-        for (int i = 0; i < sizeof(keywords); i++)
+        for (int i = 0; i < sizeof(keywords)/sizeof(keywords[0]); i++)
             if (keywords[i] == lexeme) {
                 return make_tuple(static_cast<Token>(i), lexeme);
             }
@@ -109,9 +111,10 @@ skip_comment_and_find_next:
                 }
                 return make_tuple(LITERAL_INT, lexeme);
             }
-            goto shall_float;
+            goto may_float;
         } else {  // 1-9 or .
-
+may_float:
+            Token type = LITERAL_INT;
             if (c == '.') {
                 lexeme += consumePeek(c);
                 if (c == '.') {
@@ -124,22 +127,23 @@ skip_comment_and_find_next:
                             "expect variadic notation(...) but got .." + c);
                     }
                 }
+                type = LITERAL_FLOAT;
                 goto shall_float;
             }
-
             lexeme += consumePeek(c);
-        shall_float:  // skip char consuming and appending since we did that
-                      // before jumping here;
+shall_float:  // skip char consuming and appending since we did that before jumping here;
             bool hasDot = false, hasExponent = false;
             while ((c >= '0' && c <= '9') || c == '.' || c == 'e' || c == 'E' ||
                    c == 'i') {
                 if (c >= '0' && c <= '9') {
-                    lexeme += consumePeek(c);
+                    lexeme += consumePeek(c);     
                 } else if (c == '.' && !hasDot) {
                     lexeme += consumePeek(c);
+                    type = LITERAL_FLOAT;
                 } else if ((c == 'e' && !hasExponent) ||
                            (c == 'E' && !hasExponent)) {
                     hasExponent = true;
+                    type = LITERAL_FLOAT;
                     lexeme += consumePeek(c);
                     if (c == '+' || c == '-') {
                         lexeme += consumePeek(c);
@@ -151,7 +155,7 @@ skip_comment_and_find_next:
                     return make_tuple(LITERAL_IMG, lexeme);
                 }
             }
-            return make_tuple(LITERAL_INT, lexeme);
+            return make_tuple(type, lexeme);
         }
     }
 

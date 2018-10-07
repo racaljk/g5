@@ -8,7 +8,7 @@ chan         else         goto         package      switch
 const        fallthrough  if           range        type
 continue     for          import       return       returns var this____name_is_weird      but_definitely_valid
 
-42 0900
+42 0800
   0xBadFace
  0xbbeee 0777345623415623463
 0xcafebabe 170141183460469231731687303715884105727
