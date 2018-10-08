@@ -1,8 +1,8 @@
 //===----------------------------------------------------------------------===//
-// golang specification can be found here: https://golang.org/ref/spec
+// Golang specification can be found here: https://golang.org/ref/spec
 //
-// in development mode, i consider raise runtime_error when met error , they
-// will be replaced with error stream later
+// In development, I consider raise runtime_error  since it's helpful to locate 
+// where error occurred and do further debugging. 
 //
 // Written by racaljk@github<1948638989@qq.com>
 //===----------------------------------------------------------------------===//
@@ -513,24 +513,25 @@ skip_comment_and_find_next:
 }
 
 void parse(const string & filename) {
-    fstream f(filename, ios::binary | ios::in);
+    fstream f(filename, ios::binary | ios::in); 
+    auto expect = [&f](Token tk,const string& msg)->tuple<Token,string>{
+        auto token = next(f);
+        if (get<0>(token) != tk) 
+            throw runtime_error(msg);
+        return token;
+    };
+
     // SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
     // PackageClause  = "package" PackageName .
     // PackageName = identifier .
-    if (auto[token, lexeme] = next(f); get<0>(next(f)) != KW_package) {
-        throw runtime_error("a go source file should always start with \"package\" besides meanlessing chars");
-    }
+    expect(KW_package,"a go source file should always start with \"package\" besides meanlessing chars");
+    package = get<1>(expect(TK_ID,"expect an identifier after package keyword"));
+    expect(OP_SEMI,"expect an semicolon");
 
-    if (auto[token, lexeme] = next(f); token == TK_ID) {
-        package = lexeme;
-    }
-    else {
-        throw runtime_error("expect an identifier after package keyword\n");
-    }
+    // ImportDecl       = "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) .
+    // ImportSpec       = [ "." | PackageName ] ImportPath .
+    // ImportPath       = string_lit .
 
-    if (auto[token, lexeme] = next(f); token != OP_SEMI) 
-        throw runtime_error("expect an explicit semicolon");
-    
 
     
 }
@@ -553,8 +554,8 @@ void printLex(const string & filename) {
 
 int main() {
     const string filename = "b.go";
-    printLex(filename);
-   // parse(filename);
+    //printLex(filename);
+    parse(filename);
     getchar();
     return 0;
 }
