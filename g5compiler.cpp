@@ -25,7 +25,7 @@ using namespace std;
 
 static int line = 1, column = 1, lastToken = -1;
 static string package;
-static vector<string> imports;
+static map<string, string> imports;
 
 static struct goruntime{
 } grt;
@@ -514,25 +514,57 @@ skip_comment_and_find_next:
 
 void parse(const string & filename) {
     fstream f(filename, ios::binary | ios::in); 
-    auto expect = [&f](Token tk,const string& msg)->tuple<Token,string>{
-        auto token = next(f);
-        if (get<0>(token) != tk) 
-            throw runtime_error(msg);
-        return token;
+
+    auto expect = [&f](Token tk,const string& msg){
+        auto t = next(f);
+        if (get<0>(t) != tk) throw runtime_error(msg);
+
+        struct _Anony{
+            Token token;
+            string lexeme;
+            _Anony(tuple<Token, string> & t) :token(get<0>(t)), lexeme(get<1>(t)) {}
+        };
+        return _Anony(t);
     };
+    auto decompose = [](tuple<Token,string> & t) {
+        struct _Anony {
+            Token token;
+            string lexeme;
+            _Anony(tuple<Token, string> & t) :token(get<0>(t)), lexeme(get<1>(t)) {}
+        };
+        return _Anony(t);
+    };
+
 
     // SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
     // PackageClause  = "package" PackageName .
     // PackageName = identifier .
     expect(KW_package,"a go source file should always start with \"package\" besides meanlessing chars");
-    package = get<1>(expect(TK_ID,"expect an identifier after package keyword"));
-    expect(OP_SEMI,"expect an semicolon");
+    package = expect(TK_ID,"expect an identifier after package keyword").lexeme;
+    expect(OP_SEMI,"expect a semicolon");
 
     // ImportDecl       = "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) .
     // ImportSpec       = [ "." | PackageName ] ImportPath .
     // ImportPath       = string_lit .
+    auto[token, lexeme] = next(f);
+    while (token == KW_import) {
+        auto t = decompose(next(f));
+        if (t.token == OP_LPAREN) {
+            t = decompose(next(f));
+            do {
+                string importName,alias;
+                if (t.token == OP_DOT || t.token == TK_ID) {
+                    alias = t.lexeme;
+                }
+                importName = expect(LITERAL_STR, "import path should not empty").lexeme;
+                expect(OP_COLON, "expect an explicit semicolon after import declaration").lexeme;
+                imports[importName] = alias;
+                t = decompose(next(f));
+            } while (t.token != OP_RPAREN);
+        }
 
-
+        expect(OP_SEMI, "expect an explicit semicolon");
+    }
     
 }
 
