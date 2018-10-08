@@ -30,12 +30,17 @@ string keywords[] = { "break",    "default",     "func",   "interface", "select"
                      "continue", "for",         "import", "return",    "var" };
 
 enum TokenType : signed int{
-    KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case, KW_defer, KW_go, KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package, KW_switch,
-    KW_const, KW_fallthrough, KW_if, KW_range, KW_type, KW_continue, KW_for, KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDASSIGN, OP_BITANDASSIGN,
-    OP_AND, OP_EQ, OP_NE, OP_LPAREN, OP_RPAREN, OP_SUB, OP_BITOR, OP_SUBASSIGN, OP_BITORASSIGN, OP_OR, OP_LT, OP_LE, OP_LBRACKET, OP_RBRACKET, OP_MUL, OP_XOR,
-    OP_MULASSIGN, OP_BITXORASSIGN, OP_CHAN, OP_GT, OP_GE, OP_LBRACE, OP_RBRACE, OP_DIV, OP_LSHIFT, OP_DIVASSIGN, OP_LSFTASSIGN, OP_INC, OP_ASSIGN,
-    OP_SHORTASSIGN, OP_COMMA, OP_SEMI, OP_MOD, OP_RSHIFT, OP_MODASSIGN, OP_RSFTASSIGN, OP_DEC, OP_NOT, OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR,
-    OP_ANDXORASSIGN, TK_ID, LITERAL_INT, LITERAL_FLOAT, LITERAL_IMG, LITERAL_RUNE, LITERAL_STR, TK_EOF
+    KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case, KW_defer,
+    KW_go, KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package, KW_switch,
+    KW_const, KW_fallthrough, KW_if, KW_range, KW_type, KW_continue, KW_for,
+    KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDASSIGN, OP_BITANDASSIGN,
+    OP_AND, OP_EQ, OP_NE, OP_LPAREN, OP_RPAREN, OP_SUB, OP_BITOR, OP_SUBASSIGN,
+    OP_BITORASSIGN, OP_OR, OP_LT, OP_LE, OP_LBRACKET, OP_RBRACKET, OP_MUL, OP_XOR,
+    OP_MULASSIGN, OP_BITXORASSIGN, OP_CHAN, OP_GT, OP_GE, OP_LBRACE, OP_RBRACE,
+    OP_DIV, OP_LSHIFT, OP_DIVASSIGN, OP_LSFTASSIGN, OP_INC, OP_ASSIGN, OP_SHORTASSIGN,
+    OP_COMMA, OP_SEMI, OP_MOD, OP_RSHIFT, OP_MODASSIGN, OP_RSFTASSIGN, OP_DEC,
+    OP_NOT, OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORASSIGN, TK_ID,
+    LITERAL_INT, LITERAL_FLOAT, LITERAL_IMG, LITERAL_RUNE, LITERAL_STR, TK_EOF
 };
 
 //===----------------------------------------------------------------------===//
@@ -44,8 +49,12 @@ enum TokenType : signed int{
 static int line = 1, column = 1, lastToken = -1;
 static string package;
 static map<string, string> imports;
-struct Token { TokenType type; string lexeme; Token(TokenType a, const string&b) :type(a), lexeme(b) {} };
+struct Token { 
+    TokenType type; string lexeme; 
+    Token(TokenType a, const string&b) :type(a), lexeme(b) {} 
+};
 static struct goruntime{
+    vector<tuple<string,string,string> > consts; // const symbol <name,type,value> 
 } grt;
 
 
@@ -69,9 +78,11 @@ skip_comment_and_find_next:
         if (c == '\n') {
             line++;
             column = 1;
-            if ((lastToken >= TK_ID && lastToken <= LITERAL_STR) || lastToken == KW_break ||lastToken == KW_continue 
-                || lastToken == KW_fallthrough || lastToken == KW_return||lastToken == OP_INC || lastToken == OP_DEC 
-                || lastToken == OP_RPAREN || lastToken == OP_RBRACKET || lastToken == OP_RBRACE) {
+            if ((lastToken >= TK_ID && lastToken <= LITERAL_STR) 
+                || lastToken == KW_fallthrough||lastToken == KW_continue
+                || lastToken == KW_return || lastToken == KW_break
+                ||lastToken == OP_INC || lastToken == OP_DEC || lastToken == OP_RPAREN 
+                || lastToken == OP_RBRACKET || lastToken == OP_RBRACE) {
                 consumePeek(c);
                 lastToken = OP_SEMI;
                 return Token(OP_SEMI, ";");
@@ -549,11 +560,10 @@ void parse(const string & filename) {
                     importName = t.lexeme;
                 }
                 importName = importName.substr(1, importName.length() - 2);
-                expect(OP_SEMI, "expect an explicit semicolon after import declaration").lexeme;
+                expect(OP_SEMI, "expect an explicit semicolon after import declaration");
                 imports[importName] = alias;
                 t = next(f);
             } while (t.type != OP_RPAREN);
-      
         }
         else {
             string importName, alias;
@@ -569,6 +579,37 @@ void parse(const string & filename) {
         }
         expect(OP_SEMI, "expect an explicit semicolon");
         t = next(f);
+    }
+
+    // TopLevelDecl  = Declaration | FunctionDecl | MethodDecl .
+    // Declaration   = ConstDecl | TypeDecl | VarDecl .
+    while (t.type == KW_const || t.type==KW_type || t.type==KW_var || t.type==KW_func ) {
+        // ConstDecl      = "const" ( ConstSpec | "(" { ConstSpec ";" } ")" ) .
+        // ConstSpec = IdentifierList[[Type] "=" ExpressionList] .
+        // IdentifierList = identifier{ "," identifier } .
+        // ExpressionList = Expression{ "," Expression } .
+        if (t.type == KW_const) {
+            t = next(f);
+            if (t.type == OP_LPAREN) {
+                do {
+                    //identifier list
+                    grt.consts.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme, "", "");
+                    t = next(f);
+                    if (t.type == OP_COMMA) {
+                        while (t.type == OP_COMMA) {
+                            grt.consts.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme, "", "");
+                            t = next(f);
+                        }                    
+                        // type
+                        // expression list
+                        expect(OP_SEMI, "expect an explicit semicolon");
+                    }
+                } while (t.type != OP_RPAREN);
+            }
+            else {
+
+            }
+        }
     }
 }
 
@@ -587,7 +628,7 @@ void printLex(const string & filename) {
 }
 
 int main() {
-    const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\parse.go";
+    const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\consts.go";
     //printLex(filename);
     parse(filename);
     getchar();
