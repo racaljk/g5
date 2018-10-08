@@ -17,15 +17,19 @@
 #include <vector>
 #include <tuple>
 #include <map>
-#define _G5_DEBUG
 using namespace std;
 
 //===----------------------------------------------------------------------===//
-// global datas
+// global data
 //===----------------------------------------------------------------------===//
 
 static int line = 1, column = 1, lastToken = -1;
-static map<long, map<string, string>> ast;
+static string package;
+static vector<string> imports;
+
+static struct goruntime{
+} grt;
+
 
 //===----------------------------------------------------------------------===//
 // various declarations 
@@ -38,7 +42,7 @@ string keywords[] = { "break",    "default",     "func",   "interface", "select"
                      "const",    "fallthrough", "if",     "range",     "type",
                      "continue", "for",         "import", "return",    "var" };
 
-enum Token {
+enum Token : signed int{
     KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case, KW_defer, KW_go, KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package, KW_switch,
     KW_const, KW_fallthrough, KW_if, KW_range, KW_type, KW_continue, KW_for, KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDASSIGN, OP_BITANDASSIGN,
     OP_AND, OP_EQ, OP_NE, OP_LPAREN, OP_RPAREN, OP_SUB, OP_BITOR, OP_SUBASSIGN, OP_BITORASSIGN, OP_OR, OP_LT, OP_LE, OP_LBRACKET, OP_RBRACKET, OP_MUL, OP_XOR,
@@ -48,7 +52,7 @@ enum Token {
 };
 
 //===----------------------------------------------------------------------===//
-// give me 5, I'll give you a runnable golang back
+// Give me 5, I'll give you a minimal but complete golang impl back.
 //===----------------------------------------------------------------------===//
 
 tuple<Token, string> next(fstream& f) {
@@ -71,12 +75,14 @@ skip_comment_and_find_next:
                 || lastToken == KW_break || lastToken == KW_continue || lastToken == KW_fallthrough || lastToken == KW_return ||
                 lastToken == OP_INC || lastToken == OP_DEC || lastToken == OP_RPAREN || lastToken == OP_RBRACKET || lastToken == OP_RBRACE) {
                 consumePeek(c);
+                lastToken = OP_SEMI;
                 return make_tuple(OP_SEMI, ";");
             }
         }
         consumePeek(c);
     }
     if (f.eof()) {
+        lastToken = TK_EOF;
         return make_tuple(TK_EOF, "");
     }
 
@@ -91,9 +97,10 @@ skip_comment_and_find_next:
 
         for (int i = 0; i < sizeof(keywords) / sizeof(keywords[0]); i++)
             if (keywords[i] == lexeme) {
+                lastToken = static_cast<Token>(i);
                 return make_tuple(static_cast<Token>(i), lexeme);
             }
-
+        lastToken = TK_ID;
         return make_tuple(TK_ID, lexeme);
     }
 
@@ -116,7 +123,7 @@ skip_comment_and_find_next:
                 do {
                     lexeme += consumePeek(c);
                 } while (isdigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F');
-
+                lastToken = LITERAL_INT;
                 return make_tuple(LITERAL_INT, lexeme);
             }
             else if ((c >= '0' && c <= '9') ||
@@ -130,6 +137,7 @@ skip_comment_and_find_next:
                         goto shall_float;
                     }
                 }
+                lastToken = LITERAL_INT;
                 return make_tuple(LITERAL_INT, lexeme);
             }
             goto may_float;
@@ -143,6 +151,7 @@ skip_comment_and_find_next:
                     lexeme += consumePeek(c);
                     if (c == '.') {
                         lexeme += consumePeek(c);
+                        lastToken = OP_VARIADIC;
                         return make_tuple(OP_VARIADIC, lexeme);
                     }
                     else {
@@ -179,12 +188,15 @@ skip_comment_and_find_next:
                         f.get();
                         column++;
                         lexeme += c;
+                        lastToken = LITERAL_IMG;
                         return make_tuple(LITERAL_IMG, lexeme);
                     }
                 }
+                lastToken = type;
                 return make_tuple(type, lexeme);
             }
             else {
+                lastToken = type;
                 return make_tuple(type, lexeme);
             }
         }
@@ -235,6 +247,7 @@ skip_comment_and_find_next:
                 "illegal rune at least in current implementation of g8");
         }
         lexeme += consumePeek(c);
+        lastToken = LITERAL_RUNE;
         return make_tuple(LITERAL_RUNE, lexeme);
     }
 
@@ -251,6 +264,7 @@ skip_comment_and_find_next:
                 "raw string literal does not have a closed symbol \"`\"");
         }
         lexeme += consumePeek(c);
+        lastToken = LITERAL_STR;
         return make_tuple(LITERAL_STR, lexeme);
     }
     else if (c == '"') {
@@ -266,6 +280,7 @@ skip_comment_and_find_next:
                 "string literal does not have a closed symbol \"\"\"");
         }
         lexeme += consumePeek(c);
+        lastToken = LITERAL_STR;
         return make_tuple(LITERAL_STR, lexeme);
     }
 
@@ -275,10 +290,12 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
+            lastToken = OP_ADDASSIGN;
             return make_tuple(OP_ADDASSIGN, lexeme);
         }
         else if (c == '+') {
             lexeme += consumePeek(c);
+            lastToken = OP_INC;
             return make_tuple(OP_INC, lexeme);
         }
         return make_tuple(OP_ADD, lexeme);
@@ -286,119 +303,158 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
+            lastToken = OP_BITANDASSIGN;
             return make_tuple(OP_BITANDASSIGN, lexeme);
         }
         else if (c == '&') {
             lexeme += consumePeek(c);
+            lastToken = OP_AND;
             return make_tuple(OP_AND, lexeme);
         }
         else if (c == '^') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
+                lastToken = OP_ANDXORASSIGN;
                 return make_tuple(OP_ANDXORASSIGN, lexeme);
             }
+            lastToken = OP_ANDXOR;
             return make_tuple(OP_ANDXOR, lexeme);
         }
+        lastToken = OP_BITAND;
         return make_tuple(OP_BITAND, lexeme);
     case '=':  //=  ==
         lexeme += consumePeek(c);
         if (c == '=') {
+            lastToken = OP_EQ;
             return make_tuple(OP_EQ, lexeme);
         }
+        lastToken = OP_ASSIGN;
         return make_tuple(OP_ASSIGN, lexeme);
     case '!':  //!  !=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
+            lastToken = OP_NE;
             return make_tuple(OP_NE, lexeme);
         }
+        lastToken = OP_NOT;
         return make_tuple(OP_NOT, lexeme);
     case '(':
         lexeme += consumePeek(c);
+        lastToken = OP_LPAREN;
         return make_tuple(OP_LPAREN, lexeme);
     case ')':
         lexeme += consumePeek(c);
+        lastToken = OP_RPAREN;
         return make_tuple(OP_RPAREN, lexeme);
     case '-':  //-  -= --
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
+            lastToken = OP_SUBASSIGN;
             return make_tuple(OP_SUBASSIGN, lexeme);
         }
         else if (c == '-') {
             lexeme += consumePeek(c);
+            lastToken = OP_DEC;
             return make_tuple(OP_DEC, lexeme);
         }
+        lastToken = OP_SUB;
         return make_tuple(OP_SUB, lexeme);
     case '|':  //|  |=  ||
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
+            lastToken = OP_BITORASSIGN;
             return make_tuple(OP_BITORASSIGN, lexeme);
         }
         else if (c == '|') {
             lexeme += consumePeek(c);
+            lastToken = OP_OR;
             return make_tuple(OP_OR, lexeme);
         }
+        lastToken = OP_BITOR;
         return make_tuple(OP_BITOR, lexeme);
     case '<':  //<  <=  <- <<  <<=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
+            lastToken = OP_LE;
             return make_tuple(OP_LE, lexeme);
         }
         else if (c == '-') {
             lexeme += consumePeek(c);
+            lastToken = OP_CHAN;
             return make_tuple(OP_CHAN, lexeme);
         }
         else if (c == '<') {
             lexeme += consumePeek(c);
-            if (c == '=') return make_tuple(OP_LSFTASSIGN, lexeme);
+            if (c == '=') {
+                lastToken = OP_LSFTASSIGN;
+                return make_tuple(OP_LSFTASSIGN, lexeme);
+            }
+            lastToken = OP_LSHIFT;
             return make_tuple(OP_LSHIFT, lexeme);
         }
+        lastToken = OP_LT;
         return make_tuple(OP_LT, lexeme);
     case '[':
         lexeme += consumePeek(c);
+        lastToken = OP_LBRACKET;
         return make_tuple(OP_LBRACKET, lexeme);
     case ']':
         lexeme += consumePeek(c);
+        lastToken = OP_RBRACKET;
         return make_tuple(OP_RBRACKET, lexeme);
     case '*':  //*  *=
         lexeme += consumePeek(c);
         if (c == '=') {
+            lastToken = OP_MULASSIGN;
             return make_tuple(OP_MULASSIGN, lexeme);
         }
+        lastToken = OP_MUL;
         return make_tuple(OP_MUL, lexeme);
     case '^':  //^  ^=
         lexeme += consumePeek(c);
         if (c == '=') {
+            lastToken = OP_BITXORASSIGN;
             return make_tuple(OP_BITXORASSIGN, lexeme);
         }
+        lastToken = OP_XOR;
         return make_tuple(OP_XOR, lexeme);
     case '>':  //>  >=  >>  >>=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
+            lastToken = OP_GE;
             return make_tuple(OP_GE, lexeme);
         }
         else if (c == '>') {
             lexeme += consumePeek(c);
-            if (c == '=') return make_tuple(OP_RSFTASSIGN, lexeme);
+            if (c == '=') {
+                lastToken = OP_RSFTASSIGN;
+                return make_tuple(OP_RSFTASSIGN, lexeme);
+            }
+            lastToken = OP_RSHIFT;
             return make_tuple(OP_RSHIFT, lexeme);
         }
+        lastToken = OP_GT;
         return make_tuple(OP_GT, lexeme);
     case '{':
         lexeme += consumePeek(c);
+        lastToken = OP_LBRACE;
         return make_tuple(OP_LBRACE, lexeme);
     case '}':
         lexeme += consumePeek(c);
+        lastToken = OP_RBRACE;
         return make_tuple(OP_RBRACE, lexeme);
     case '/': {  // /  /= // /*...*/
         char pending = consumePeek(c);
         if (c == '=') {
             lexeme += pending;
             lexeme += consumePeek(c);
+            lastToken = OP_DIVASSIGN;
             return make_tuple(OP_DIVASSIGN, lexeme);
         }
         else if (c == '/') {
@@ -421,27 +477,34 @@ skip_comment_and_find_next:
             } while (f.good());
         }
         lexeme += pending;
+        lastToken = OP_DIV;
         return make_tuple(OP_DIV, lexeme);
     }
     case ':':  // :=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
+            lastToken = OP_SHORTASSIGN;
             return make_tuple(OP_SHORTASSIGN, lexeme);
         }
+        lastToken = OP_COLON;
         return make_tuple(OP_COLON, lexeme);
     case ',':
         lexeme += consumePeek(c);
+        lastToken = OP_COMMA;
         return make_tuple(OP_COMMA, lexeme);
     case ';':
         lexeme += consumePeek(c);
+        lastToken = OP_SEMI;
         return make_tuple(OP_SEMI, lexeme);
     case '%':  //%  %=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
+            lastToken = OP_MODASSIGN;
             return make_tuple(OP_MODASSIGN, lexeme);
         }
+        lastToken = OP_MOD;
         return make_tuple(OP_MOD, lexeme);
         // case '.' has already checked
     }
@@ -454,19 +517,22 @@ void parse(const string & filename) {
     // SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
     // PackageClause  = "package" PackageName .
     // PackageName = identifier .
+    if (auto[token, lexeme] = next(f); get<0>(next(f)) != KW_package) {
+        throw runtime_error("a go source file should always start with \"package\" besides meanlessing chars");
+    }
 
-    auto parserPackage = [&]() {
-        if (auto[token, lexeme] = next(f); get<0>(next(f)) != KW_package) {
-            throw runtime_error("a go source file should always start with \"package\" besides meanlessing chars");
-        }
+    if (auto[token, lexeme] = next(f); token == TK_ID) {
+        package = lexeme;
+    }
+    else {
+        throw runtime_error("expect an identifier after package keyword\n");
+    }
 
-        if (auto[token, lexeme] = next(f); token == TK_ID) {
+    if (auto[token, lexeme] = next(f); token != OP_SEMI) 
+        throw runtime_error("expect an explicit semicolon");
+    
 
-        }
-        else {
-            throw runtime_error("expect an identifier after package keyword\n");
-        }
-    };
+    
 }
 
 
@@ -481,7 +547,6 @@ void printLex(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
     while (f.good()) {
         auto[token, lexeme] = next(f);
-        lastToken = token;
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
     }
 }
@@ -489,7 +554,7 @@ void printLex(const string & filename) {
 int main() {
     const string filename = "b.go";
     printLex(filename);
-    //parse(filename);
+   // parse(filename);
     getchar();
     return 0;
 }
