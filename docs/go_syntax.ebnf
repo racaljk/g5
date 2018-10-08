@@ -25,16 +25,10 @@ Type      = TypeName | TypeLit | "(" Type ")" .
 TypeName  = identifier | QualifiedIdent .
 TypeLit   = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
 	    SliceType | MapType | ChannelType .
+QualifiedIdent = PackageName "." identifier .
 
 IdentifierList = identifier { "," identifier } .
 ExpressionList = Expression { "," Expression } .
-Expression = UnaryExpr | Expression binary_op Expression .
-UnaryExpr  = PrimaryExpr | unary_op UnaryExpr .
-binary_op  = "||" | "&&" | rel_op | add_op | mul_op .
-rel_op     = "==" | "!=" | "<" | "<=" | ">" | ">=" .
-add_op     = "+" | "-" | "|" | "^" .
-mul_op     = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
-unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
 
 FunctionDecl = "func" FunctionName Signature [ FunctionBody ] .
 FunctionName = identifier .
@@ -51,6 +45,8 @@ StatementList = { Statement ";" } .
 MethodDecl = "func" Receiver MethodName Signature [ FunctionBody ] .
 Receiver   = Parameters .
 
+
+
 Statement =
 	Declaration | LabeledStmt | SimpleStmt |
 	GoStmt | ReturnStmt | BreakStmt | ContinueStmt | GotoStmt |
@@ -58,3 +54,30 @@ Statement =
 	DeferStmt .
 
 SimpleStmt = EmptyStmt | ExpressionStmt | SendStmt | IncDecStmt | Assignment | ShortVarDecl .
+
+
+
+Expression = UnaryExpr | Expression binary_op Expression .
+UnaryExpr  = PrimaryExpr | unary_op UnaryExpr .
+binary_op  = "||" | "&&" | rel_op | add_op | mul_op .
+rel_op     = "==" | "!=" | "<" | "<=" | ">" | ">=" .
+add_op     = "+" | "-" | "|" | "^" .
+mul_op     = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
+unary_op   = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
+
+PrimaryExpr =
+	Operand |
+	Conversion |
+	MethodExpr |
+	PrimaryExpr Selector |
+	PrimaryExpr Index |
+	PrimaryExpr Slice |
+	PrimaryExpr TypeAssertion |
+	PrimaryExpr Arguments .
+
+Selector       = "." identifier .
+Index          = "[" Expression "]" .
+Slice          = "[" [ Expression ] ":" [ Expression ] "]" |
+                 "[" [ Expression ] ":" Expression ":" Expression "]" .
+TypeAssertion  = "." "(" Type ")" .
+Arguments      = "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" .

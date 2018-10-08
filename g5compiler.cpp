@@ -535,6 +535,27 @@ void parse(const string & filename) {
         return t;
     };
 
+    auto type = [&](Token & t) {
+        if (t.type == TK_ID) {
+            string typeName;
+            typeName += t.lexeme;
+            if (t.lexeme == package) {
+                //qualified identifier
+                typeName += expect(OP_DOT, "qualified identifier required an dot as its delimiter").lexeme;
+                typeName += expect(OP_DOT, "expect an identifier after dot delimiter").lexeme;
+            }
+            for (auto&eachIdent : grt.consts) {
+                get<1>(eachIdent) = typeName;
+            }
+        }
+        else if (t.type==OP_LPAREN) {
+
+        }
+        else if (...) {
+
+        }
+    };
+
     // SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
     // PackageClause  = "package" PackageName .
     // PackageName = identifier .
@@ -600,7 +621,11 @@ void parse(const string & filename) {
                             grt.consts.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme, "", "");
                             t = next(f);
                         }                    
-                        // type
+                        // Type = TypeName | TypeLit | "(" Type ")" .
+                        // TypeName = identifier | QualifiedIdent .
+                        // TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
+                        // SliceType | MapType | ChannelType .
+                        ....
                         // expression list
                         expect(OP_SEMI, "expect an explicit semicolon");
                     }
