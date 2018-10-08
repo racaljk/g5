@@ -6,7 +6,6 @@
 //
 // Written by racaljk@github<1948638989@qq.com>
 //===----------------------------------------------------------------------===//
-
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -25,7 +24,7 @@ using namespace std;
 // global datas
 //===----------------------------------------------------------------------===//
 
-static int line = 1, column = 1;
+static int line = 1, column = 1, lastToken = -1;
 static map<long, map<string, string>> ast;
 
 //===----------------------------------------------------------------------===//
@@ -68,6 +67,12 @@ skip_comment_and_find_next:
         if (c == '\n') {
             line++;
             column = 1;
+            if ((lastToken >= TK_ID && lastToken <= LITERAL_STR)
+                || lastToken == KW_break || lastToken == KW_continue || lastToken == KW_fallthrough || lastToken == KW_return ||
+                lastToken == OP_INC || lastToken == OP_DEC || lastToken == OP_RPAREN || lastToken == OP_RBRACKET || lastToken == OP_RBRACE) {
+                consumePeek(c);
+                return make_tuple(OP_SEMI, ";");
+            }
         }
         consumePeek(c);
     }
@@ -476,12 +481,13 @@ void printLex(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
     while (f.good()) {
         auto[token, lexeme] = next(f);
+        lastToken = token;
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
     }
 }
 
 int main() {
-    const string filename = "a.go";
+    const string filename = "b.go";
     printLex(filename);
     //parse(filename);
     getchar();
