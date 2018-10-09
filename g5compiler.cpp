@@ -597,10 +597,20 @@ void parse(const string & filename) {
         AstNode* length;
         AstNode* elementType;
     };
-    struct  AstStructType :public AstNode {
-        AstNode* 
+    struct AstStructType :public AstNode {
+        union _FieldDecl{
+            struct{
+                AstNode* identifierList;
+                AstNode* type;
+            }named;
+            AstNode* typeName;
+        };
+
+        vector<map<_FieldDecl,string>> fields;
     };
-    
+    struct AstPointerType: public AstNode{
+        AstNode * baseType;
+    };
 
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
@@ -814,12 +824,27 @@ void parse(const string & filename) {
     };
     parseStructType = [&](Token&t)->AstNode* {
         AstStructType* node = nullptr;
-        if (t.type == OP_LBRACKET) {
+        if (t.type == KW_struct) {
             node = new  AstStructType;
-            node->length = parseExpression(t);
-            expect(OP_RBRACKET, "bracket [] must match in array type declaration");
-            node->elementType = parseType(t);
-        }
+            expect(OP_LBRACE, "left brace { must exist in struct type declaration")
+            do{
+                AstStructType::_FieldDecl fd;
+                if(auto * tmp = parseIdentifierList(t);tmp!=nullptr){
+                    fd.named.identifierList = tmp;
+                    fd.named.type = parseType(t);
+                }else{
+                    if(t.type==OP_MUL){
+                        t=next(f);
+                    }
+                    fd.typeName = parseTypeName(t);        
+                }
+                string tag
+                if(t.type==LITERAL_STR){
+                    tag = t.lexeme;
+                }
+                node.fields.push_back(make_tuple(fd,tag));
+            }while(t.type!=OP_RBRACE);
+      }
         return node;
     };
 
