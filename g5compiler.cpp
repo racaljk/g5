@@ -606,16 +606,26 @@ void parse(const string & filename) {
             AstNode* typeName;
         };
 
-        vector<map<_FieldDecl,string>> fields;
+        map<_FieldDecl,string> fields;
     };
     struct AstPointerType: public AstNode{
         AstNode * baseType;
+    };
+    struct AstFunctionType :public AstNode {
+        AstNode * signature;
+    };
+    struct AstSignature :public AstNode {
+        AstNode* parameters;
+        AstNode* result;
+    };
+    struct AstParameter :public AstNode {
+   
     };
 
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
         parseDeclaration, parseConstDecl, parseIdentifierList,parseType, parseTypeName,
-        parseTypeLit,parseArrayType,parseStructType, parsePointerType;
+        parseTypeLit,parseArrayType,parseStructType, parsePointerType,parseFunctionType;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -710,7 +720,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
     parseConstDecl = [&](Token&t)->AstNode* {
         AstConstDecl * node = nullptr;
         if (t.type == KW_const) {
@@ -732,10 +741,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
-
-
-    // Type = TypeName | TypeLit | "(" Type ")" .
     parseType = [&](Token&t)->AstNode* {
         AstType * node = nullptr;
         // Declaration   = ConstDecl | TypeDecl | VarDecl .
@@ -754,8 +759,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
-    // TypeName = identifier | QualifiedIdent .
     parseTypeName = [&](Token&t)->AstNode* {
         AstTypeName * node = nullptr;
         if (t.type == TK_ID) {
@@ -771,7 +774,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
     // TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
     // SliceType | MapType | ChannelType .
     parseTypeLit = [&](Token&t)->AstNode* {
@@ -811,7 +813,6 @@ void parse(const string & filename) {
         return node;
     };
 
-
     parseArrayType = [&](Token&t)->AstNode* {
         AstArrayType* node = nullptr;
         if (t.type == OP_LBRACKET) {
@@ -843,7 +844,7 @@ void parse(const string & filename) {
                 if(t.type==LITERAL_STR){
                     tag = t.lexeme;
                 }
-                node.fields.push_back(make_tuple(fd,tag));
+                node->fields[fd] = tag;
             }while(t.type!=OP_RBRACE);
       }
         return node;
@@ -858,6 +859,20 @@ void parse(const string & filename) {
         return node;
     };
 
+    parseFunctionType = [&](Token&t)->AstNode* {
+        AstFunctionType* node = nullptr;
+        if (t.type == KW_func) {
+        }
+        return node;
+    };
+    parseSignature = [&](Token&t)->AstNode* {
+        AstFunctionType* node = nullptr;
+        if (t.type == KW_func) {
+        }
+        return node;
+    };
+    
+
     parseIdentifierList = [&](Token&t)->AstNode* {
         auto* node = new AstIdentifierList;
         node->identifierList.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme);
@@ -870,8 +885,6 @@ void parse(const string & filename) {
 
         return node;
     };
-
-
 }
 
 void emitStub() {}
