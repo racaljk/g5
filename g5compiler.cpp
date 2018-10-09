@@ -47,8 +47,6 @@ enum TokenType : signed int{
 // global data
 //===----------------------------------------------------------------------===//
 static int line = 1, column = 1, lastToken = -1;
-static string package;
-static map<string, string> imports;
 struct Token { 
     TokenType type; string lexeme; 
     Token(TokenType a, const string&b) :type(a), lexeme(b) {} 
@@ -56,7 +54,6 @@ struct Token {
 static struct goruntime{
     vector<tuple<string,string,string> > consts; // const symbol <name,type,value> 
 } grt;
-
 
 //===----------------------------------------------------------------------===//
 // Give me 5, I'll give you a minimal but complete golang impl back.
@@ -527,52 +524,108 @@ skip_comment_and_find_next:
 }
 
 void parse(const string & filename) {
-    fstream f(filename, ios::binary | ios::in); 
+    fstream f(filename, ios::binary | ios::in);
 
-    auto expect = [&f](TokenType tk,const string& msg){
+    auto expect = [&f](TokenType tk, const string& msg) {
         auto t = next(f);
         if (t.type != tk) throw runtime_error(msg);
         return t;
     };
 
-    auto type = [&](Token & t) {
-        if (t.type == TK_ID) {
-            string typeName;
-            typeName += t.lexeme;
-            if (t.lexeme == package) {
-                //qualified identifier
-                typeName += expect(OP_DOT, "qualified identifier required an dot as its delimiter").lexeme;
-                typeName += expect(OP_DOT, "expect an identifier after dot delimiter").lexeme;
-            }
-            for (auto&eachIdent : grt.consts) {
-                get<1>(eachIdent) = typeName;
-            }
-        }
-        else if (t.type==OP_LPAREN) {
+    struct AstNode { virtual ~AstNode() {} };
+    struct AstSourceFile :public AstNode {
+        AstNode* packageClause;
+        vector<AstNode*> importDecl;
+        vector<AstNode*> topLevelDecl;
+    };
+    struct AstPackageClause :public AstNode { string packageName; };
+    struct AstImportDecl :public AstNode { map<string, string> imports; };
 
-        }
-        else if (...) {
-
-        }
+    struct AstTopLevelDecl :public AstNode {
+        union {
+            AstNode* decl;
+            AstNode* functionDecl;
+            AstNode* methodDecl;
+        }atld;
     };
 
-    // SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
-    // PackageClause  = "package" PackageName .
-    // PackageName = identifier .
-    expect(KW_package,"a go source file should always start with \"package\" besides meanlessing chars");
-    package = expect(TK_ID,"expect an identifier after package keyword").lexeme;
-    expect(OP_SEMI,"expect a semicolon");
+    struct AstFunctionDecl :public AstNode {
 
-    // ImportDecl       = "import" ( ImportSpec | "(" { ImportSpec ";" } ")" ) .
-    // ImportSpec       = [ "." | PackageName ] ImportPath .
-    // ImportPath       = string_lit .
-    auto t = next(f);
-    while (t.type == KW_import) {
+    };
+
+    struct AstMethodDecl : public AstNode {
+
+    };
+
+    struct AstDeclaration :public AstNode {
+        union {
+            AstNode* constDecl;
+            AstNode* typeDecl;
+            AstNode* varDecl;
+        }ad;
+    };    
+    
+    struct AstConstDecl :public AstNode {
+        AstNode* identifierList;
+        AstNode* type;
+        AstNode* expressionList;
+    };
+
+    struct AstIdentifierList :public AstNode {
+        vector<string> identifierList;
+    };
+
+    function<AstNode*()> parseSourceFile;
+    function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
+        parseDeclaration, parseConstDecl, parseIdentifierList;
+
+    parseSourceFile = [&]()->AstNode* {
+        auto node = new AstSourceFile;
+        auto t = next(f);
+
+        node->packageClause = parsePackageClause(t);
+
+        expect(OP_SEMI, "expect a semicolon");
         t = next(f);
-        if (t.type == OP_LPAREN) {
+        while (t.type == KW_import) {
+            node->importDecl.push_back(parseImportDecl(t));
             t = next(f);
-            do {
-                string importName,alias;
+        }
+        // todo: fix TK_EOF producing bug
+        while (t.type != TK_EOF) {
+            node->topLevelDecl.push_back(parseTopLevelDecl(t));
+        }
+        return node;
+    };
+    parsePackageClause = [&](Token&t)->AstNode* {
+        auto node = new AstPackageClause;
+        expect(KW_package, "a go source file should always start with \"package\" keyword");
+        node->packageName = expect(TK_ID, "expect an identifier after package keyword").lexeme;
+        return node;
+    };
+    parseImportDecl = [&](Token&t)->AstNode* {
+        if (t.type == KW_import) {
+            auto node = new AstImportDecl;
+            t = next(f);
+            if (t.type == OP_LPAREN) {
+                t = next(f);
+                do {
+                    string importName, alias;
+                    if (t.type == OP_DOT || t.type == TK_ID) {
+                        alias = t.lexeme;
+                        importName = expect(LITERAL_STR, "import path should not empty").lexeme;
+                    }
+                    else {
+                        importName = t.lexeme;
+                    }
+                    importName = importName.substr(1, importName.length() - 2);
+                    expect(OP_SEMI, "expect an explicit semicolon after import declaration");
+                    node->imports[importName] = alias;
+                    t = next(f);
+                } while (t.type != OP_RPAREN);
+            }
+            else {
+                string importName, alias;
                 if (t.type == OP_DOT || t.type == TK_ID) {
                     alias = t.lexeme;
                     importName = expect(LITERAL_STR, "import path should not empty").lexeme;
@@ -581,61 +634,86 @@ void parse(const string & filename) {
                     importName = t.lexeme;
                 }
                 importName = importName.substr(1, importName.length() - 2);
-                expect(OP_SEMI, "expect an explicit semicolon after import declaration");
-                imports[importName] = alias;
-                t = next(f);
-            } while (t.type != OP_RPAREN);
-        }
-        else {
-            string importName, alias;
-            if (t.type == OP_DOT || t.type == TK_ID) {
-                alias = t.lexeme;
-                importName = expect(LITERAL_STR, "import path should not empty").lexeme;
+                node->imports[importName] = alias;
             }
-            else {
-                importName = t.lexeme;
-            }
-            importName = importName.substr(1, importName.length() - 2);
-            imports[importName] = alias;
+            return node;
         }
-        expect(OP_SEMI, "expect an explicit semicolon");
-        t = next(f);
-    }
-
-    // TopLevelDecl  = Declaration | FunctionDecl | MethodDecl .
-    // Declaration   = ConstDecl | TypeDecl | VarDecl .
-    while (t.type == KW_const || t.type==KW_type || t.type==KW_var || t.type==KW_func ) {
-        // ConstDecl      = "const" ( ConstSpec | "(" { ConstSpec ";" } ")" ) .
-        // ConstSpec = IdentifierList[[Type] "=" ExpressionList] .
-        // IdentifierList = identifier{ "," identifier } .
-        // ExpressionList = Expression{ "," Expression } .
+        return nullptr;
+    };
+    parseTopLevelDecl = [&](Token&t)->AstNode* {
+        auto node = new AstTopLevelDecl;
+        // TopLevelDecl  = Declaration | FunctionDecl | MethodDecl .
+        if (node->atld.decl = parseDeclaration(t); node->atld.decl != nullptr) {
+            return node;
+        }
+#error to implement
+    };
+    parseDeclaration = [&](Token&t)->AstNode* {
+        auto * node = new AstDeclaration;
+        // Declaration   = ConstDecl | TypeDecl | VarDecl .
+        if (node->ad.constDecl = parseConstDecl(t); node->ad.constDecl != nullptr) {
+            return node;
+        }
+#error to implement
+    };
+    parseConstDecl = [&](Token&t)->AstNode* {
+        auto * node = new AstConstDecl;
         if (t.type == KW_const) {
             t = next(f);
             if (t.type == OP_LPAREN) {
                 do {
-                    //identifier list
-                    grt.consts.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme, "", "");
-                    t = next(f);
-                    if (t.type == OP_COMMA) {
-                        while (t.type == OP_COMMA) {
-                            grt.consts.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme, "", "");
-                            t = next(f);
-                        }                    
-                        // Type = TypeName | TypeLit | "(" Type ")" .
-                        // TypeName = identifier | QualifiedIdent .
-                        // TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
-                        // SliceType | MapType | ChannelType .
-                        ....
-                        // expression list
-                        expect(OP_SEMI, "expect an explicit semicolon");
-                    }
+                    node->identifierList = parseIdentifierList(t);
+#error to implement
+                    expect(OP_SEMI, "expect an explicit semicolon");
                 } while (t.type != OP_RPAREN);
             }
             else {
 
             }
         }
-    }
+    };
+
+
+
+    // Type = TypeName | TypeLit | "(" Type ")" .
+    // TypeName = identifier | QualifiedIdent .
+    // TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
+    // SliceType | MapType | ChannelType .
+    function<void(Token&, vector<string> &)> type;
+    type = [&](Token & t, vector<string> & typeList) {
+        if (t.type == TK_ID) {
+            string typeName;
+            typeName += t.lexeme;
+            if (t.lexeme == package) {
+                //qualified identifier
+                typeName += expect(OP_DOT, "qualified identifier required an dot as its delimiter").lexeme;
+                typeName += expect(OP_DOT, "expect an identifier after dot delimiter").lexeme;
+            }
+            typeList.push_back(typeName);
+        }
+        else if (t.type == OP_LPAREN) {
+            type(t, typeList);
+            expect(OP_RPAREN, "() must match");
+        }
+        else {
+            if (t.type == OP_LBRACKET) {
+
+            }
+        }
+    };
+
+    parseIdentifierList = [&](Token&t)->AstNode* {
+        auto* node = new AstIdentifierList;
+        node->identifierList.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme);
+        t = next(f);
+        if (t.type == OP_COMMA)
+            while (t.type == OP_COMMA) {
+                node->identifierList.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme);
+                t = next(f);
+            }
+
+        return node;
+    };
 }
 
 void emitStub() {}
