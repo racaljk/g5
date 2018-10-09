@@ -615,7 +615,7 @@ void parse(const string & filename) {
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
         parseDeclaration, parseConstDecl, parseIdentifierList,parseType, parseTypeName,
-        parseTypeLit,parseArrayType,parseStructType;
+        parseTypeLit,parseArrayType,parseStructType, parsePointerType;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -846,6 +846,15 @@ void parse(const string & filename) {
                 node.fields.push_back(make_tuple(fd,tag));
             }while(t.type!=OP_RBRACE);
       }
+        return node;
+    };
+
+    parsePointerType = [&](Token&t)->AstNode* {
+        AstPointerType* node = nullptr;
+        if (t.type == OP_MUL) {
+            node = new AstPointerType;
+            node->baseType = parseType(t);
+        }
         return node;
     };
 
