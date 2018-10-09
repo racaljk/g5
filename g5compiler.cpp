@@ -33,13 +33,13 @@ enum TokenType : signed int{
     KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case, KW_defer,
     KW_go, KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package, KW_switch,
     KW_const, KW_fallthrough, KW_if, KW_range, KW_type, KW_continue, KW_for,
-    KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDASSIGN, OP_BITANDASSIGN,
-    OP_AND, OP_EQ, OP_NE, OP_LPAREN, OP_RPAREN, OP_SUB, OP_BITOR, OP_SUBASSIGN,
-    OP_BITORASSIGN, OP_OR, OP_LT, OP_LE, OP_LBRACKET, OP_RBRACKET, OP_MUL, OP_XOR,
-    OP_MULASSIGN, OP_BITXORASSIGN, OP_CHAN, OP_GT, OP_GE, OP_LBRACE, OP_RBRACE,
-    OP_DIV, OP_LSHIFT, OP_DIVASSIGN, OP_LSFTASSIGN, OP_INC, OP_ASSIGN, OP_SHORTASSIGN,
-    OP_COMMA, OP_SEMI, OP_MOD, OP_RSHIFT, OP_MODASSIGN, OP_RSFTASSIGN, OP_DEC,
-    OP_NOT, OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORASSIGN, TK_ID,
+    KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDAGN, OP_BITANDAGN,
+    OP_AND, OP_EQ, OP_NE, OP_LPAREN, OP_RPAREN, OP_SUB, OP_BITOR, OP_SUBAGN,
+    OP_BITORAGN, OP_OR, OP_LT, OP_LE, OP_LBRACKET, OP_RBRACKET, OP_MUL, OP_XOR,
+    OP_MULAGN, OP_BITXORAGN, OP_CHAN, OP_GT, OP_GE, OP_LBRACE, OP_RBRACE,
+    OP_DIV, OP_LSHIFT, OP_DIVAGN, OP_LSFTAGN, OP_INC, OP_AGN, OP_SHORTAGN,
+    OP_COMMA, OP_SEMI, OP_MOD, OP_RSHIFT, OP_MODAGN, OP_RSFTAGN, OP_DEC,
+    OP_NOT, OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORAGN, TK_ID,
     LITERAL_INT, LITERAL_FLOAT, LITERAL_IMG, LITERAL_RUNE, LITERAL_STR, TK_EOF
 };
 
@@ -301,8 +301,8 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_ADDASSIGN;
-            return Token(OP_ADDASSIGN, lexeme);
+            lastToken = OP_ADDAGN;
+            return Token(OP_ADDAGN, lexeme);
         }
         else if (c == '+') {
             lexeme += consumePeek(c);
@@ -314,8 +314,8 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_BITANDASSIGN;
-            return Token(OP_BITANDASSIGN, lexeme);
+            lastToken = OP_BITANDAGN;
+            return Token(OP_BITANDAGN, lexeme);
         }
         else if (c == '&') {
             lexeme += consumePeek(c);
@@ -326,8 +326,8 @@ skip_comment_and_find_next:
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
-                lastToken = OP_ANDXORASSIGN;
-                return Token(OP_ANDXORASSIGN, lexeme);
+                lastToken = OP_ANDXORAGN;
+                return Token(OP_ANDXORAGN, lexeme);
             }
             lastToken = OP_ANDXOR;
             return Token(OP_ANDXOR, lexeme);
@@ -340,8 +340,8 @@ skip_comment_and_find_next:
             lastToken = OP_EQ;
             return Token(OP_EQ, lexeme);
         }
-        lastToken = OP_ASSIGN;
-        return Token(OP_ASSIGN, lexeme);
+        lastToken = OP_AGN;
+        return Token(OP_AGN, lexeme);
     case '!':  //!  !=
         lexeme += consumePeek(c);
         if (c == '=') {
@@ -363,8 +363,8 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_SUBASSIGN;
-            return Token(OP_SUBASSIGN, lexeme);
+            lastToken = OP_SUBAGN;
+            return Token(OP_SUBAGN, lexeme);
         }
         else if (c == '-') {
             lexeme += consumePeek(c);
@@ -377,8 +377,8 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_BITORASSIGN;
-            return Token(OP_BITORASSIGN, lexeme);
+            lastToken = OP_BITORAGN;
+            return Token(OP_BITORAGN, lexeme);
         }
         else if (c == '|') {
             lexeme += consumePeek(c);
@@ -402,8 +402,8 @@ skip_comment_and_find_next:
         else if (c == '<') {
             lexeme += consumePeek(c);
             if (c == '=') {
-                lastToken = OP_LSFTASSIGN;
-                return Token(OP_LSFTASSIGN, lexeme);
+                lastToken = OP_LSFTAGN;
+                return Token(OP_LSFTAGN, lexeme);
             }
             lastToken = OP_LSHIFT;
             return Token(OP_LSHIFT, lexeme);
@@ -421,16 +421,16 @@ skip_comment_and_find_next:
     case '*':  //*  *=
         lexeme += consumePeek(c);
         if (c == '=') {
-            lastToken = OP_MULASSIGN;
-            return Token(OP_MULASSIGN, lexeme);
+            lastToken = OP_MULAGN;
+            return Token(OP_MULAGN, lexeme);
         }
         lastToken = OP_MUL;
         return Token(OP_MUL, lexeme);
     case '^':  //^  ^=
         lexeme += consumePeek(c);
         if (c == '=') {
-            lastToken = OP_BITXORASSIGN;
-            return Token(OP_BITXORASSIGN, lexeme);
+            lastToken = OP_BITXORAGN;
+            return Token(OP_BITXORAGN, lexeme);
         }
         lastToken = OP_XOR;
         return Token(OP_XOR, lexeme);
@@ -444,8 +444,8 @@ skip_comment_and_find_next:
         else if (c == '>') {
             lexeme += consumePeek(c);
             if (c == '=') {
-                lastToken = OP_RSFTASSIGN;
-                return Token(OP_RSFTASSIGN, lexeme);
+                lastToken = OP_RSFTAGN;
+                return Token(OP_RSFTAGN, lexeme);
             }
             lastToken = OP_RSHIFT;
             return Token(OP_RSHIFT, lexeme);
@@ -465,8 +465,8 @@ skip_comment_and_find_next:
         if (c == '=') {
             lexeme += pending;
             lexeme += consumePeek(c);
-            lastToken = OP_DIVASSIGN;
-            return Token(OP_DIVASSIGN, lexeme);
+            lastToken = OP_DIVAGN;
+            return Token(OP_DIVAGN, lexeme);
         }
         else if (c == '/') {
             do {
@@ -495,8 +495,8 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_SHORTASSIGN;
-            return Token(OP_SHORTASSIGN, lexeme);
+            lastToken = OP_SHORTAGN;
+            return Token(OP_SHORTAGN, lexeme);
         }
         lastToken = OP_COLON;
         return Token(OP_COLON, lexeme);
@@ -512,8 +512,8 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_MODASSIGN;
-            return Token(OP_MODASSIGN, lexeme);
+            lastToken = OP_MODAGN;
+            return Token(OP_MODAGN, lexeme);
         }
         lastToken = OP_MOD;
         return Token(OP_MOD, lexeme);
@@ -606,16 +606,26 @@ void parse(const string & filename) {
             AstNode* typeName;
         };
 
-        vector<map<_FieldDecl,string>> fields;
+        map<_FieldDecl,string> fields;
     };
     struct AstPointerType: public AstNode{
         AstNode * baseType;
+    };
+    struct AstFunctionType :public AstNode {
+        AstNode * signature;
+    };
+    struct AstSignature :public AstNode {
+        AstNode* parameters;
+        AstNode* result;
+    };
+    struct AstParameter :public AstNode {
+   
     };
 
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
         parseDeclaration, parseConstDecl, parseIdentifierList,parseType, parseTypeName,
-        parseTypeLit,parseArrayType,parsStructType;
+        parseTypeLit,parseArrayType,parseStructType, parsePointerType,parseFunctionType;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -710,7 +720,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
     parseConstDecl = [&](Token&t)->AstNode* {
         AstConstDecl * node = nullptr;
         if (t.type == KW_const) {
@@ -732,10 +741,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
-
-
-    // Type = TypeName | TypeLit | "(" Type ")" .
     parseType = [&](Token&t)->AstNode* {
         AstType * node = nullptr;
         // Declaration   = ConstDecl | TypeDecl | VarDecl .
@@ -754,8 +759,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
-    // TypeName = identifier | QualifiedIdent .
     parseTypeName = [&](Token&t)->AstNode* {
         AstTypeName * node = nullptr;
         if (t.type == TK_ID) {
@@ -771,7 +774,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
     // TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
     // SliceType | MapType | ChannelType .
     parseTypeLit = [&](Token&t)->AstNode* {
@@ -811,7 +813,6 @@ void parse(const string & filename) {
         return node;
     };
 
-
     parseArrayType = [&](Token&t)->AstNode* {
         AstArrayType* node = nullptr;
         if (t.type == OP_LBRACKET) {
@@ -822,11 +823,12 @@ void parse(const string & filename) {
         }
         return node;
     };
+
     parseStructType = [&](Token&t)->AstNode* {
         AstStructType* node = nullptr;
         if (t.type == KW_struct) {
             node = new  AstStructType;
-            expect(OP_LBRACE, "left brace { must exist in struct type declaration")
+            expect(OP_LBRACE, "left brace { must exist in struct type declaration");
             do{
                 AstStructType::_FieldDecl fd;
                 if(auto * tmp = parseIdentifierList(t);tmp!=nullptr){
@@ -838,15 +840,38 @@ void parse(const string & filename) {
                     }
                     fd.typeName = parseTypeName(t);        
                 }
-                string tag
+                string tag;
                 if(t.type==LITERAL_STR){
                     tag = t.lexeme;
                 }
-                node.fields.push_back(make_tuple(fd,tag));
+                node->fields[fd] = tag;
             }while(t.type!=OP_RBRACE);
       }
         return node;
     };
+
+    parsePointerType = [&](Token&t)->AstNode* {
+        AstPointerType* node = nullptr;
+        if (t.type == OP_MUL) {
+            node = new AstPointerType;
+            node->baseType = parseType(t);
+        }
+        return node;
+    };
+
+    parseFunctionType = [&](Token&t)->AstNode* {
+        AstFunctionType* node = nullptr;
+        if (t.type == KW_func) {
+        }
+        return node;
+    };
+    parseSignature = [&](Token&t)->AstNode* {
+        AstFunctionType* node = nullptr;
+        if (t.type == KW_func) {
+        }
+        return node;
+    };
+    
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         auto* node = new AstIdentifierList;
@@ -860,8 +885,6 @@ void parse(const string & filename) {
 
         return node;
     };
-
-
 }
 
 void emitStub() {}
