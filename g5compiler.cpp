@@ -564,20 +564,20 @@ void parse(const string & filename) {
             AstNode* varDecl;
         }ad;
     };    
-    
     struct AstConstDecl :public AstNode {
         vector<AstNode*> identifierList;
         vector<AstNode*> type;
         vector<AstNode*> expressionList;
     };
-
     struct AstType :public AstNode {
         union {
             AstNode* typeName;
             AstNode* typeLit;
         }at;
     };
-
+    struct AstIdentifierList :public AstNode {
+        vector<string> identifierList;
+    };
     struct AstTypeName : public AstNode {
         string typeName;
     };
@@ -593,15 +593,19 @@ void parse(const string & filename) {
             AstNode* channelType;
         }atl;
     };
-
-    struct AstIdentifierList :public AstNode {
-        vector<string> identifierList;
+    struct AstArrayType : public AstNode {
+        AstNode* length;
+        AstNode* elementType;
     };
+    struct  AstStructType :public AstNode {
+        AstNode* 
+    };
+    
 
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
         parseDeclaration, parseConstDecl, parseIdentifierList,parseType, parseTypeName,
-        parseTypeLit;
+        parseTypeLit,parseArrayType,parsStructType;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -798,6 +802,26 @@ void parse(const string & filename) {
     };
 
 
+    parseArrayType = [&](Token&t)->AstNode* {
+        AstArrayType* node = nullptr;
+        if (t.type == OP_LBRACKET) {
+            node = new AstArrayType;
+            node->length = parseExpression(t);
+            expect(OP_RBRACKET, "bracket [] must match in array type declaration");
+            node->elementType = parseType(t);
+        }
+        return node;
+    };
+    parseStructType = [&](Token&t)->AstNode* {
+        AstStructType* node = nullptr;
+        if (t.type == OP_LBRACKET) {
+            node = new  AstStructType;
+            node->length = parseExpression(t);
+            expect(OP_RBRACKET, "bracket [] must match in array type declaration");
+            node->elementType = parseType(t);
+        }
+        return node;
+    };
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         auto* node = new AstIdentifierList;
@@ -811,6 +835,8 @@ void parse(const string & filename) {
 
         return node;
     };
+
+
 }
 
 void emitStub() {}
