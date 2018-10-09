@@ -52,7 +52,7 @@ struct Token {
     Token(TokenType a, const string&b) :type(a), lexeme(b) {} 
 };
 static struct goruntime{
-    vector<tuple<string,string,string> > consts; // const symbol <name,type,value> 
+    string package;
 } grt;
 
 //===----------------------------------------------------------------------===//
@@ -566,9 +566,32 @@ void parse(const string & filename) {
     };    
     
     struct AstConstDecl :public AstNode {
-        AstNode* identifierList;
-        AstNode* type;
-        AstNode* expressionList;
+        vector<AstNode*> identifierList;
+        vector<AstNode*> type;
+        vector<AstNode*> expressionList;
+    };
+
+    struct AstType :public AstNode {
+        union {
+            AstNode* typeName;
+            AstNode* typeLit;
+        }at;
+    };
+
+    struct AstTypeName : public AstNode {
+        string typeName;
+    };
+    struct AstTypeLit : public AstNode {
+        union {
+            AstNode* arrayType;
+            AstNode* structType;
+            AstNode* pointerType;
+            AstNode* functionType;
+            AstNode* interfaceType;
+            AstNode* sliceType;
+            AstNode* mapType;
+            AstNode* channelType;
+        }atl;
     };
 
     struct AstIdentifierList :public AstNode {
@@ -577,7 +600,8 @@ void parse(const string & filename) {
 
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
-        parseDeclaration, parseConstDecl, parseIdentifierList;
+        parseDeclaration, parseConstDecl, parseIdentifierList,parseType, parseTypeName,
+        parseTypeLit;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -601,6 +625,7 @@ void parse(const string & filename) {
         auto node = new AstPackageClause;
         expect(KW_package, "a go source file should always start with \"package\" keyword");
         node->packageName = expect(TK_ID, "expect an identifier after package keyword").lexeme;
+        grt.package = node->packageName;
         return node;
     };
     parseImportDecl = [&](Token&t)->AstNode* {
@@ -641,66 +666,138 @@ void parse(const string & filename) {
         return nullptr;
     };
     parseTopLevelDecl = [&](Token&t)->AstNode* {
-        auto node = new AstTopLevelDecl;
+        AstTopLevelDecl* node = nullptr;
         // TopLevelDecl  = Declaration | FunctionDecl | MethodDecl .
-        if (node->atld.decl = parseDeclaration(t); node->atld.decl != nullptr) {
-            return node;
+        if (auto* tmp = parseDeclaration(t); tmp != nullptr) {
+            node = new AstTopLevelDecl;
+            node->atld.decl = tmp;
+        }else if (auto* tmp = parseFunctionDecl(t); tmp != nullptr) {
+            node = new AstTopLevelDecl;
+            node->atld.functionDecl = tmp;
         }
-#error to implement
+        else if (auto* tmp = parseMethodDecl(t); tmp != nullptr) {
+            node = new AstTopLevelDecl;
+            node->atld.methodDecl = tmp;
+        }
+        return node;
     };
     parseDeclaration = [&](Token&t)->AstNode* {
-        auto * node = new AstDeclaration;
+        AstDeclaration * node = nullptr;
         // Declaration   = ConstDecl | TypeDecl | VarDecl .
-        if (node->ad.constDecl = parseConstDecl(t); node->ad.constDecl != nullptr) {
-            return node;
+        if (auto*tmp = parseConstDecl(t); tmp != nullptr) {
+            node = new AstDeclaration;
+            node->ad.constDecl=tmp;
+        }else  if (auto*tmp = parseTypeDecl(t); tmp != nullptr) {
+            node = new AstDeclaration;
+            node->ad.typeDecl = tmp;
+        }else  if (auto*tmp = parseVarDecl(t); tmp != nullptr) {
+            node = new AstDeclaration;
+            node->ad.varDecl = tmp;
         }
-#error to implement
+        return node;
     };
+
     parseConstDecl = [&](Token&t)->AstNode* {
-        auto * node = new AstConstDecl;
+        AstConstDecl * node = nullptr;
         if (t.type == KW_const) {
+            node = new AstConstDecl;
             t = next(f);
             if (t.type == OP_LPAREN) {
                 do {
-                    node->identifierList = parseIdentifierList(t);
-#error to implement
+                    node->identifierList.push_back(parseIdentifierList(t));
+                    node->type.push_back(parseType(t));
+                    node->expressionList.push_back(parseExpressionList(t));
                     expect(OP_SEMI, "expect an explicit semicolon");
                 } while (t.type != OP_RPAREN);
             }
             else {
-
+                node->identifierList.push_back(parseIdentifierList(t));
+                node->type.push_back(parseType(t));
+                node->expressionList.push_back(parseExpressionList(t));
             }
         }
+        return node;
     };
 
 
 
     // Type = TypeName | TypeLit | "(" Type ")" .
+    parseType = [&](Token&t)->AstNode* {
+        AstType * node = nullptr;
+        // Declaration   = ConstDecl | TypeDecl | VarDecl .
+        if (auto*tmp = parseTypeName(t); tmp != nullptr) {
+            node = new AstType;
+            node->at.typeName = tmp;
+        }
+        else  if (auto*tmp = parseTypeLit(t); tmp != nullptr) {
+            node = new AstType;
+            node->at.typeLit = tmp;
+        }
+        else  if (t.type==OP_LPAREN) {
+            t = next(f);
+            node = dynamic_cast<AstType*>(parseType(t));
+            expect(OP_RPAREN, "the parenthesis () must match in type declaration");
+        }
+        return node;
+    };
+
     // TypeName = identifier | QualifiedIdent .
-    // TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
-    // SliceType | MapType | ChannelType .
-    function<void(Token&, vector<string> &)> type;
-    type = [&](Token & t, vector<string> & typeList) {
+    parseTypeName = [&](Token&t)->AstNode* {
+        AstTypeName * node = nullptr;
         if (t.type == TK_ID) {
+            node = new AstTypeName;
             string typeName;
             typeName += t.lexeme;
-            if (t.lexeme == package) {
+            if (t.lexeme == grt.package) {
                 //qualified identifier
                 typeName += expect(OP_DOT, "qualified identifier required an dot as its delimiter").lexeme;
                 typeName += expect(OP_DOT, "expect an identifier after dot delimiter").lexeme;
             }
-            typeList.push_back(typeName);
+            node->typeName = typeName;
         }
-        else if (t.type == OP_LPAREN) {
-            type(t, typeList);
-            expect(OP_RPAREN, "() must match");
-        }
-        else {
-            if (t.type == OP_LBRACKET) {
-
-            }
-        }
+        return node;
     };
+
+    // TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
+    // SliceType | MapType | ChannelType .
+    parseTypeLit = [&](Token&t)->AstNode* {
+        AstTypeLit * node = nullptr;
+        if (auto*tmp = parseArrayType(t); tmp != nullptr) {
+            node = new AstTypeLit;
+            node->atl.arrayType = tmp;
+        }
+        else  if (auto*tmp = parseStructType(t); tmp != nullptr) {
+            node = new AstTypeLit;
+            node->atl.structType = tmp;
+        }
+        else  if (auto*tmp = parsePointerType(t); tmp != nullptr) {
+            node = new AstTypeLit;
+            node->atl.pointerType = tmp;
+        }
+        else  if (auto*tmp = parseFunctionType(t); tmp != nullptr) {
+            node = new AstTypeLit;
+            node->atl.functionType = tmp;
+        }
+        else  if (auto*tmp = parseInterfaceType(t); tmp != nullptr) {
+            node = new AstTypeLit;
+            node->atl.interfaceType = tmp;
+        }
+        else  if (auto*tmp = parseSliceType(t); tmp != nullptr) {
+            node = new AstTypeLit;
+            node->atl.sliceType = tmp;
+        }
+        else  if (auto*tmp = parseMapType(t); tmp != nullptr) {
+            node = new AstTypeLit;
+            node->atl.mapType = tmp;
+        }
+        else  if (auto*tmp = parseChannelType(t); tmp != nullptr) {
+            node = new AstTypeLit;
+            node->atl.channelType = tmp;
+        }
+        return node;
+    };
+
+
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         auto* node = new AstIdentifierList;
