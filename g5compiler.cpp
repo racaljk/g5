@@ -1150,16 +1150,16 @@ const AstNode* parse(const string & filename) {
         AstStatementList * node = nullptr;
         if (auto * tmp = parseStatement(t); tmp != nullptr) {
             node = new AstStatementList;
-            node->statement.push_back(tmp);
+            node->statements.push_back(tmp);
             expect(OP_SEMI, "statement should seperate by semicolon");
             while ((tmp = parseStatement(t))) {
-                node->statement.push_back(tmp);
+                node->statements.push_back(tmp);
                 expect(OP_SEMI, "statement should seperate by semicolon");
             }
         }
         return node;
     };
-    parseStatemen = [&](Token&t)->AstNode* {
+    parseStatement = [&](Token&t)->AstNode* {
         AstStatement * node = nullptr;
         //todo
         return node;
