@@ -43,6 +43,7 @@ enum TokenType : signed int {
     LITERAL_INT, LITERAL_FLOAT, LITERAL_IMG, LITERAL_RUNE, LITERAL_STR, TK_EOF
 };
 struct AstNode { virtual ~AstNode() {} };
+struct AstIdentifierList :public AstNode { vector<string> identifierList; };
 struct AstSourceFile :public AstNode {
     AstNode* packageClause;
     vector<AstNode*> importDecl;
@@ -50,7 +51,6 @@ struct AstSourceFile :public AstNode {
 };
 struct AstPackageClause :public AstNode { string packageName; };
 struct AstImportDecl :public AstNode { map<string, string> imports; };
-
 struct AstTopLevelDecl :public AstNode {
     union {
         AstNode* decl;
@@ -58,15 +58,6 @@ struct AstTopLevelDecl :public AstNode {
         AstNode* methodDecl;
     }atld;
 };
-
-struct AstFunctionDecl :public AstNode {
-
-};
-
-struct AstMethodDecl : public AstNode {
-
-};
-
 struct AstDeclaration :public AstNode {
     union {
         AstNode* constDecl;
@@ -85,7 +76,6 @@ struct AstType :public AstNode {
         AstNode* typeLit;
     }at;
 };
-struct AstIdentifierList :public AstNode { vector<string> identifierList; };
 struct AstTypeName : public AstNode { string typeName; };
 struct AstTypeLit : public AstNode {
     union {
@@ -164,6 +154,17 @@ struct AstVarSpec :public AstNode {
         }named;
         AstNode* expressionList;
     }avs;
+};
+struct AstFunctionDecl :public AstNode {
+    string funcName;
+    AstNode* signature;
+    AstNode* functionBody;
+};
+struct AstFunctionBody : public AstNode { AstNode* block; };
+struct AstBlock :public AstNode { AstNode* statementList; };
+struct AstStatementList : public AstNode { vector<AstNode*> statements; };
+struct AstStatement : public AstNode {
+    // todo
 };
 //===----------------------------------------------------------------------===//
 // global data
@@ -665,7 +666,8 @@ const AstNode* parse(const string & filename) {
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
         parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType,
-        parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec;
+        parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec, parseFunctionDecl, 
+        parseFunctionBody, parseBlock, parseStatementList, parseStatement;
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         AstIdentifierList* node = nullptr;
@@ -1114,6 +1116,52 @@ const AstNode* parse(const string & filename) {
                 node->avs.expressionList = parseExpressionList(t);
             }
         }
+        return node;
+    };
+    parseFunctionDecl = [&](Token&t)->AstNode* {
+        AstFunctionDecl * node = nullptr;
+        if (t.type == KW_func) {
+            node = new AstFunctionDecl;
+            node->funcName = expect(TK_ID, "function should have a name if it's not an anonymous function").lexeme;
+            t = next(f);
+            node->signature = parseSignature(t);
+            node->functionBody = parseFunctionBody(t);
+        }
+        return node;
+    };
+    parseFunctionBody = [&](Token&t)->AstNode* {
+        AstFunctionBody * node = nullptr;
+        if (auto* tmp = parseBlock(t);tmp!=nullptr) {
+            node = new AstFunctionBody;
+            node->block = parseBlock(t);
+        }
+        return node;
+    };
+    parseBlock = [&](Token&t)->AstNode* {
+        AstBlock * node = nullptr;
+        if (t.type==OP_LBRACE) {
+            node = new AstBlock;
+            node->statementList = parseStatementList(t);
+            expect(OP_RBRACE, "block should end with right brace \"}\"");
+        }
+        return node;
+    };
+    parseStatementList = [&](Token&t)->AstNode* {
+        AstStatementList * node = nullptr;
+        if (auto * tmp = parseStatement(t); tmp != nullptr) {
+            node = new AstStatementList;
+            node->statement.push_back(tmp);
+            expect(OP_SEMI, "statement should seperate by semicolon");
+            while ((tmp = parseStatement(t))) {
+                node->statement.push_back(tmp);
+                expect(OP_SEMI, "statement should seperate by semicolon");
+            }
+        }
+        return node;
+    };
+    parseStatemen = [&](Token&t)->AstNode* {
+        AstStatement * node = nullptr;
+        //todo
         return node;
     };
     // parsing startup
