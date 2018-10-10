@@ -637,12 +637,25 @@ void parse(const string & filename) {
             AstNode* type;
         }ar;
     };
+    struct AstInterfaceType :public AstNode {
+        vector<AstNode*> methodSpec;
+    };
+    struct AstMethodSpec :public AstNode {
+        union {
+            struct _MethodSignature{
+                string methodName;
+                AstNode* signature;
+            }named;
+            AstNode* interfaceTypeName;
+        }ams;
+    };
 
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
-        parseSignature, parseParameter, parseParameterDecl, parseResult;
+        parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
+        parseMethodSpec;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -829,7 +842,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
     parseArrayType = [&](Token&t)->AstNode* {
         AstArrayType* node = nullptr;
         if (t.type == OP_LBRACKET) {
@@ -840,7 +852,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
     parseStructType = [&](Token&t)->AstNode* {
         AstStructType* node = nullptr;
         if (t.type == KW_struct) {
@@ -866,7 +877,6 @@ void parse(const string & filename) {
       }
         return node;
     };
-
     parsePointerType = [&](Token&t)->AstNode* {
         AstPointerType* node = nullptr;
         if (t.type == OP_MUL) {
@@ -875,7 +885,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
     parseFunctionType = [&](Token&t)->AstNode* {
         AstFunctionType* node = nullptr;
         if (t.type == KW_func) {
@@ -907,7 +916,7 @@ void parse(const string & filename) {
             } while (t.type != OP_RPAREN);
         }
         return node;
-    }
+    };
     parseParameterDecl = [&](Token&t)->AstNode* {
         AstParameterDecl* node = nullptr;
         if (auto*tmp = parseIdentifierList(t); tmp != nullptr) {
@@ -933,6 +942,33 @@ void parse(const string & filename) {
         else  if (auto*tmp = parseType(t); tmp != nullptr) {
             node = new AstResult;
             node->ar.type = tmp;
+        }
+        return node;
+    };
+    parseInterfaceType = [&](Token&t)->AstNode* {
+        AstInterfaceType* node = nullptr;
+        if (t.type == OP_LBRACE) {
+            do {
+                if (auto*tmp = parseMethodSpec(t); tmp != nullptr) {
+                    node = new AstInterfaceType;
+                    node->methodSpec.push_back(tmp);
+                    expect(OP_SEMI, "expect a semicolon after method specification");
+                }
+            } while (t.type != OP_RBRACE);
+        }
+
+        return node;
+    };
+    parseMethodSpec = [&](Token&t)->AstNode* {
+        AstMethodSpec* node = nullptr;
+        if (t.type==TK_ID) {
+            node = new AstMethodSpec;
+            node->ams.named.methodName = t.lexeme;
+            node->ams.named.signature = parseSignature(t);
+        }
+        else  if (auto*tmp = parseTypeName(t); tmp != nullptr) {
+            node = new AstMethodSpec;
+            node->ams.interfaceTypeName = tmp;
         }
         return node;
     };
