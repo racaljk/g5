@@ -1324,6 +1324,29 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
+    parseSwitchStmt = [&](Token&t)->AstNode* {
+        AstSwitchStmt* node = nullptr;
+        //todo
+        return node;
+    };
+    parseSelectStmt = [&](Token&t)->AstNode* {
+        AstSelectStmt* node = nullptr;
+        //todo
+        return node;
+    };
+    parseForStmt = [&](Token&t)->AstNode* {
+        AstForStmt* node = nullptr;
+        //todo
+        return node;
+    };
+    parseDeferStmt = [&](Token&t)->AstNode* {
+        AstDeferStmt* node = nullptr;
+        if(t.type==KW_defer){
+            node = new AstDeferStmt;
+            node->expression = parseExpression(t);
+        }
+        return node;
+    };
     // parsing startup
     return parseSourceFile();
 }
