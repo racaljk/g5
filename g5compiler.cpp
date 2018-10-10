@@ -1283,6 +1283,15 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
+    parseGotoStmt = [&](Token&t)->AstNode* {
+        AstGotoStmt* node = nullptr;
+        if(t.type==KW_goto){
+            node = new AstGotoStmt;
+            node->label = expect(TK_ID,"goto statement must follow a label");
+        }
+        return node;
+    };
+    
     // parsing startup
     return parseSourceFile();
 }
