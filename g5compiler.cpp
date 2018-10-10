@@ -1348,28 +1348,71 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     // simple statement
-    parseEmptyStmt | = [&](Token&t)->AstNode* {
-        AstEmptyStmt* node = nullptr;
-        return node;
-    };
+    //parseEmptyStmt | = [&](Token&t)->AstNode* {
+    //    AstEmptyStmt* node = nullptr;
+    //    return node;
+    //};
     parseExpressionStmt | = [&](Token&t)->AstNode* {
         AstExpressionStmt* node = nullptr;
+        if(auto*tmp = parseExpression(t);tmp!=nullptr){
+            node = new AstExpressionStmt;
+            node->expression = tmp;
+        }
         return node;
     };
     parseSendStmt | = [&](Token&t)->AstNode* {
         AstSendStmt* node = nullptr;
+        if(auto*tmp = parseExpression(t);tmp!=nullptr){
+            node = new AstSendStmt;
+            node->receiver = tmp;
+            expect(OP_CHAN,"expect a channel symbol");
+            node->sender = parseExpression(t);
+        }
         return node;
     };
     parseIncDecStmt | = [&](Token&t)->AstNode* {
         AstIncDecStmt* node = nullptr;
+        if(auto*tmp = parseExpression(t);tmp!=nullptr){
+            node = new AstIncDecStmt;
+            node->expression = tmp;
+            t=next(f);
+            if(t.type==OP_INC){
+                node->isInc = true;
+            }else if(t.type==OP_DEC){
+                node->isInc = false;
+            }else{
+                throw runtime_error("expect ++/--");
+            }
+        }
         return node;
     };
     parseAssignment | = [&](Token&t)->AstNode* {
         AstAssignment* node = nullptr;
+        if(auto*tmp = parseExpressionList(t);tmp!=nullptr){
+            node = new AstAssignment;
+            node->lhs = tmp;
+            t=next(f);
+            if(t.type==OP_ADD || t.type==OP_SUB ||
+                t.type==OP_BITOR||t.type==OP_XOR ||
+                t.type==OP_MUL||t.type==OP_DIV||
+                t.type==OP_MOD||t.type==OP_LSHIFT||
+                t.type==OP_RSHIFT||t.type==OP_BITAND||
+                t.type==OP_ANDXOR){
+                node->assignOp = t.type;
+            }
+            expect(OP_EQ,"expect =");
+            node->rhs = parseExpressionList(t);
+        }
         return node;
     };
     parseShortVarDecl | = [&](Token&t)->AstNode* {
         AstShortVarDecl* node = nullptr;
+        if(auto*tmp = parseIdentifierList(t);tmp!=nullptr){
+            node = new AstShortVarDecl;
+            node->lhs = tmp;
+            expect(OP_SHORTAGN,"expect := in short assign statement");
+            node->rhs = parseExpressionList(t);
+        }
         return node;
     };
 
