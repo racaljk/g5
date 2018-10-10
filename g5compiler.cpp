@@ -619,13 +619,14 @@ void parse(const string & filename) {
         AstNode* result;
     };
     struct AstParameter :public AstNode {
-   
+
     };
 
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
-        parseDeclaration, parseConstDecl, parseIdentifierList,parseType, parseTypeName,
-        parseTypeLit,parseArrayType,parseStructType, parsePointerType,parseFunctionType;
+        parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
+        parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
+        parseSignature, parseParameter, parseResult;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -862,12 +863,26 @@ void parse(const string & filename) {
     parseFunctionType = [&](Token&t)->AstNode* {
         AstFunctionType* node = nullptr;
         if (t.type == KW_func) {
+            node = new AstFunctionType;
+            node->signature = parseSignature(t);
         }
         return node;
     };
     parseSignature = [&](Token&t)->AstNode* {
-        AstFunctionType* node = nullptr;
-        if (t.type == KW_func) {
+        AstSignature* node = nullptr;
+        if (t.type == OP_LPAREN) {
+            node = new AstSignature;
+            node->parameters = parseParameter(t);
+            node->result = parseResult(t);
+        }
+        return node;
+    };
+    parseParameter = [&](Token&t)->AstNode* {
+        AstParameter* node = nullptr;
+        if (t.type == OP_LPAREN) {
+            node = new AstSignature;
+            node->parameters = parseParameter(t);
+            node->result = parseResult(t);
         }
         return node;
     };
