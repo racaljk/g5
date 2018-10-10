@@ -1464,6 +1464,34 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
+    parseForClause = [&](Token&t)->AstNode* {
+        AstForClause*node = new AstForClause;
+        node->initStmt = parseSimpleStmt(t);
+        expect(OP_SEMI, "expect semicolon in for clause");
+        node->condition = parseExpression(t);
+        expect(OP_SEMI, "expect semicolon in for clause");
+        node->psotStmt = parseSimpleStmt(t);
+        return node;
+    };
+    parseRangeClause = [&](Token&t)->AstNode* {
+        AstRangeClause*node = new AstRangeClause;
+        if (auto*tmp = parseExpressionList(t); tmp != nullptr) {
+            node->arc.expressionList = tmp;
+            expect(OP_EQ, "expect =");
+            t = next(f);
+        }
+        else if (auto* tmp = parseIdentifierList(t); tmp != nullptr) {
+            node->arc.identifierList = tmp;
+            expect(OP_SHORTAGN, "expect :=");
+            t = next(f);
+        }
+        
+        if (t.type == KW_range) {
+            t = next(f);
+            node->expression = parseExpression(t);
+        }
+        return node;
+    };
 
     parseDeferStmt = [&](Token&t)->AstNode* {
         AstDeferStmt* node = nullptr;
