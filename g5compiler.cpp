@@ -1298,6 +1298,32 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
+    parseIfStmt = [&](Token&t)->AstNode* {
+        AstIfStmt* node = nullptr;
+        if(t.type==KW_fallthrough){
+            node = new AstIfStmt;
+            if(auto* tmp = parseSimpleStmt(t);tmp!=nullptr){
+                node->condition = tmp;
+                expect(OP_SEMI,"expect an semicolon in condition part of if");
+            }
+            t=next(f);
+            node->expression = parseExpression(t);
+            t=next(f);
+            node->block = parseBlock(t);
+            t=next(f);
+            if(t.type==KW_else){
+                t=next(f);
+                if(auto *tmp1=parseIfStmt(T);tmp1!=nullptr){
+                    node->else = tmp;
+                }else if(auto *tmp1=parseBlock(T);tmp1!=nullptr){
+                    node->else = tmp1;
+                }else{
+                    throw runtime_error("else is empty");
+                }
+            }
+        }
+        return node;
+    };
     // parsing startup
     return parseSourceFile();
 }
