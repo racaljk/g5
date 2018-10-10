@@ -154,6 +154,17 @@ struct AstTypeSpec :public AstNode {
     string identifier;
     AstNode* type;
 };
+struct AstVarDecl :public AstNode { vector<AstNode*> varSpec; };
+struct AstVarSpec :public AstNode {
+    AstNode* identifierList;
+    union {
+        struct {
+            AstNode* type;
+            AstNode* expressionList;
+        }named;
+        AstNode* expressionList;
+    }avs;
+};
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
@@ -654,7 +665,7 @@ const AstNode* parse(const string & filename) {
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
         parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType,
-        parseTypeDecl, parseTypeSpec;
+        parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec;
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         AstIdentifierList* node = nullptr;
@@ -1064,6 +1075,44 @@ const AstNode* parse(const string & filename) {
                 t = next(f);
             }
             node->type = parseType(t);
+        }
+        return node;
+    };
+    parseVarDecl = [&](Token&t)->AstNode* {
+        AstVarDecl* node = nullptr;
+        if (t.type == KW_var) {
+            node = new AstVarDecl;
+            t = next(f);
+            if (t.type == OP_LPAREN) {
+                do {
+                    node->varSpec.push_back(parseVarSpec(t));
+                    expect(OP_SEMI, "expect a semicolon after each var specification");
+                } while (t.type != OP_RPAREN);
+            }
+            else {
+                node->varSpec.push_back(parseVarSpec(t));
+            }
+        }
+        return node;
+    };
+    parseVarSpec = [&](Token&t)->AstNode* {
+        AstVarSpec* node = nullptr;
+        if (auto*tmp = parseIdentifierList(t); tmp != nullptr) {
+            node = new AstVarSpec;
+            node->identifierList = tmp;
+            t = next(f);
+            if (auto * tmp1 = parseType(t); tmp1 != nullptr) {
+                node->avs.named.type = tmp1;
+                t = next(f);
+                if (t.type == OP_EQ) {
+                    t = next(f);
+                    node->avs.named.expressionList = parseExpressionList(t);
+                }
+            }
+            else if (t.type == OP_EQ) {
+                t = next(f);
+                node->avs.expressionList = parseExpressionList(t);
+            }
         }
         return node;
     };
