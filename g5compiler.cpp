@@ -1395,15 +1395,76 @@ const AstNode* parse(const string & filename) {
         if (t.type == KW_select) {
             node = new AstSelectStmt;
             expect(OP_LBRACE, "expect left brace in select statement");
-
+            do {
+                if (auto*tmp = parseCommClause(t); tmp != nullptr) {
+                    node->commClause.push_back(tmp);
+                }
+                t = next(f);
+            } while (t.type != OP_RBRACE);
+        }
+        return node;
+    };
+    parseCommClause = [&](Token&t)->AstNode* {
+        AstCommClause* node = nullptr;
+        if (auto*tmp = parseCommCase(t); tmp != nullptr) {
+            node = new AstCommCase;
+            node->commCase = tmp;
+            expect(OP_COLON, "expect colon in select case clause");
+            node->statementList = parseStatementList(t);
+        }
+        return node;
+    };
+    parseCommCase = [&](Token&t)->AstNode* {
+        AstCommCase*node = nullptr;
+        if (t.type == KW_case) {
+            node = new AstCommCase;
+            t = next(f);
+            if(auto*tmp = parseSendStmt(t); tmp != nullptr) {
+                node->acc.sendStmt = tmp;
+            }
+            else if(auto*tmp = parseRecvStmt(t); tmp != nullptr) {
+                node->acc.recvStmt = tmp;
+            }else if (t.type == KW_default) {
+                node->isDefault = true;
+            }
+        }
+        return node;
+    };
+    parseRecvStmt = [&](Token&t)->AstNode* {
+        AstRecvStmt*node = nullptr;
+        if (auto*tmp = parseExpressionList(t); tmp != nullptr) {
+            node = new AstRecvStmt;
+            node->ars.expressionList = tmp;
+            expect(OP_EQ, "expect =");
+            node->recvExpr = parseExpression(t);
+        }
+        else if (auto*tmp = parseIdentifierList(t); tmp != nullptr) {
+            node = new AstRecvStmt;
+            node->ars.identifierList = tmp;
+            expect(OP_SHORTAGN, "expect :=");
+            node->recvExpr = parseExpression(t);
         }
         return node;
     };
     parseForStmt = [&](Token&t)->AstNode* {
         AstForStmt* node = nullptr;
-        //todo
+        if (t.type == KW_for) {
+            node = new AstForStmt;
+            t = next(f);
+            if (auto*tmp = parseExpression(t); tmp != nullptr) {
+                node->afs.condition = tmp;
+            }else if (auto*tmp = parseForClause(t); tmp != nullptr) {
+                node->afs.forClause = tmp;
+            }
+            else if (auto*tmp = parseRangeClause(t); tmp != nullptr) {
+                node->afs.rangeClause = tmp;
+            }
+            t = next(f);
+            node->block = parseBlock(t);
+        }
         return node;
     };
+
     parseDeferStmt = [&](Token&t)->AstNode* {
         AstDeferStmt* node = nullptr;
         if(t.type==KW_defer){
