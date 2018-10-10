@@ -1291,7 +1291,13 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    
+    parseFallthroughStmt = [&](Token&t)->AstNode* {
+        AstFallthroughStmt* node = nullptr;
+        if(t.type==KW_fallthrough){
+            node = new AstFallthroughStmt;
+        }
+        return node;
+    };
     // parsing startup
     return parseSourceFile();
 }
