@@ -1238,7 +1238,26 @@ const AstNode* parse(const string & filename) {
     };
     parseSimpleStmt = [&](Token&t)->AstNode* {
         AstSimpleStmt * node = nullptr;
-        //todo
+        //if(auto* tmp = parseEmptyStmt(t); tmp!=nullptr){
+        //    node = new AstEmptyStmt;
+        //    node->ass.EmptyStmt = tmp;
+       // }
+        if(auto* tmp = parseExpressionStmt(t); tmp!=nullptr){
+            node = new AstExpressionStmt;
+            node->ass.expressionStmt = tmp;
+        }else if(auto* tmp = parseSendStmt(t); tmp!=nullptr){
+            node = new AstSendStmt;
+            node->ass.sendStmt = tmp;
+        }else if(auto* tmp = parseIncDecStmt(t); tmp!=nullptr){
+            node = new AstIncDecStmt;
+            node->ass.incDecStmt = tmp;
+        }else if(auto* tmp = parseAssignment(t); tmp!=nullptr){
+            node = new AstAssignment;
+            node->ass.assignment = tmp;
+        }else if(auto* tmp = parseShortVarDecl(t); tmp!=nullptr){
+            node = new AstShortVarDecl;
+            node->ass.shortVarDecl = tmp;
+        }
         return node;
     };
     parseGoStmt = [&](Token&t)->AstNode* {
@@ -1352,7 +1371,7 @@ const AstNode* parse(const string & filename) {
     //    AstEmptyStmt* node = nullptr;
     //    return node;
     //};
-    parseExpressionStmt | = [&](Token&t)->AstNode* {
+    parseExpressionStmt = [&](Token&t)->AstNode* {
         AstExpressionStmt* node = nullptr;
         if(auto*tmp = parseExpression(t);tmp!=nullptr){
             node = new AstExpressionStmt;
@@ -1360,7 +1379,7 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parseSendStmt | = [&](Token&t)->AstNode* {
+    parseSendStmt = [&](Token&t)->AstNode* {
         AstSendStmt* node = nullptr;
         if(auto*tmp = parseExpression(t);tmp!=nullptr){
             node = new AstSendStmt;
@@ -1370,7 +1389,7 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parseIncDecStmt | = [&](Token&t)->AstNode* {
+    parseIncDecStmt = [&](Token&t)->AstNode* {
         AstIncDecStmt* node = nullptr;
         if(auto*tmp = parseExpression(t);tmp!=nullptr){
             node = new AstIncDecStmt;
@@ -1386,7 +1405,7 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parseAssignment | = [&](Token&t)->AstNode* {
+    parseAssignment = [&](Token&t)->AstNode* {
         AstAssignment* node = nullptr;
         if(auto*tmp = parseExpressionList(t);tmp!=nullptr){
             node = new AstAssignment;
@@ -1405,7 +1424,7 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parseShortVarDecl | = [&](Token&t)->AstNode* {
+    parseShortVarDecl = [&](Token&t)->AstNode* {
         AstShortVarDecl* node = nullptr;
         if(auto*tmp = parseIdentifierList(t);tmp!=nullptr){
             node = new AstShortVarDecl;
