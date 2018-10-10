@@ -5,6 +5,7 @@ Implement a **g**olang compiler and minimal runtime environment within **5** fun
 
 *ps: code commit might be frequent, you can star it rather than watching.*
 
-# resource 
-+ [golang spec](https://golang.org/ref/spec)
-+ [c++17 quick overview](https://github.com/changkun/modern-cpp-tutorial)
+# resource
+> [The Go Programming Language Specification](https://golang.org/ref/spec)
+
+> [c++17 quick overview](https://github.com/changkun/modern-cpp-tutorial)
