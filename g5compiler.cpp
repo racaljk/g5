@@ -42,7 +42,113 @@ enum TokenType : signed int{
     OP_NOT, OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORAGN, TK_ID,
     LITERAL_INT, LITERAL_FLOAT, LITERAL_IMG, LITERAL_RUNE, LITERAL_STR, TK_EOF
 };
+struct AstNode { virtual ~AstNode() {} };
+struct AstSourceFile :public AstNode {
+    AstNode* packageClause;
+    vector<AstNode*> importDecl;
+    vector<AstNode*> topLevelDecl;
+};
+struct AstPackageClause :public AstNode { string packageName; };
+struct AstImportDecl :public AstNode { map<string, string> imports; };
 
+struct AstTopLevelDecl :public AstNode {
+    union {
+        AstNode* decl;
+        AstNode* functionDecl;
+        AstNode* methodDecl;
+    }atld;
+};
+
+struct AstFunctionDecl :public AstNode {
+
+};
+
+struct AstMethodDecl : public AstNode {
+
+};
+
+struct AstDeclaration :public AstNode {
+    union {
+        AstNode* constDecl;
+        AstNode* typeDecl;
+        AstNode* varDecl;
+    }ad;
+};
+struct AstConstDecl :public AstNode {
+    vector<AstNode*> identifierList;
+    vector<AstNode*> type;
+    vector<AstNode*> expressionList;
+};
+struct AstType :public AstNode {
+    union {
+        AstNode* typeName;
+        AstNode* typeLit;
+    }at;
+};
+struct AstIdentifierList :public AstNode { vector<string> identifierList; };
+struct AstTypeName : public AstNode { string typeName; };
+struct AstTypeLit : public AstNode {
+    union {
+        AstNode* arrayType;
+        AstNode* structType;
+        AstNode* pointerType;
+        AstNode* functionType;
+        AstNode* interfaceType;
+        AstNode* sliceType;
+        AstNode* mapType;
+        AstNode* channelType;
+    }atl;
+};
+struct AstArrayType : public AstNode {
+    AstNode* length;
+    AstNode* elementType;
+};
+struct AstStructType :public AstNode {
+    union _FieldDecl {
+        struct {
+            AstNode* identifierList;
+            AstNode* type;
+        }named;
+        AstNode* typeName;
+    };
+
+    map<_FieldDecl, string> fields;
+};
+struct AstPointerType : public AstNode { AstNode * baseType; };
+struct AstFunctionType :public AstNode { AstNode * signature; };
+struct AstSignature :public AstNode {
+    AstNode* parameters;
+    AstNode* result;
+};
+struct AstParameter :public AstNode { vector<AstNode*> parameterList;};
+struct AstParameterDecl :public AstNode {
+    AstNode* identifierList;
+    bool isVariadic = false;
+    AstNode* type;
+};
+struct AstResult :public AstNode {
+    union {
+        AstNode* parameter;
+        AstNode* type;
+    }ar;
+};
+struct AstInterfaceType :public AstNode { vector<AstNode*> methodSpec; };
+struct AstMethodSpec :public AstNode {
+    union {
+        struct _MethodSignature {
+            AstNode* methodName;
+            AstNode* signature;
+        }named;
+        AstNode* interfaceTypeName;
+    }ams;
+};
+struct AstMethodName :public AstNode { string methodName; };
+struct AstSliceType :public AstNode { AstNode* elementType; };
+struct AstMapType :public AstNode {
+    AstNode* keyType;
+    AstNode* elementType;
+};
+struct AstChannelType :public AstNode { AstNode* elementType; };
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
@@ -537,131 +643,6 @@ void parse(const string & filename) {
         return t;
     };
 
-    struct AstNode { virtual ~AstNode() {} };
-    struct AstSourceFile :public AstNode {
-        AstNode* packageClause;
-        vector<AstNode*> importDecl;
-        vector<AstNode*> topLevelDecl;
-    };
-    struct AstPackageClause :public AstNode { string packageName; };
-    struct AstImportDecl :public AstNode { map<string, string> imports; };
-
-    struct AstTopLevelDecl :public AstNode {
-        union {
-            AstNode* decl;
-            AstNode* functionDecl;
-            AstNode* methodDecl;
-        }atld;
-    };
-
-    struct AstFunctionDecl :public AstNode {
-
-    };
-
-    struct AstMethodDecl : public AstNode {
-
-    };
-
-    struct AstDeclaration :public AstNode {
-        union {
-            AstNode* constDecl;
-            AstNode* typeDecl;
-            AstNode* varDecl;
-        }ad;
-    };    
-    struct AstConstDecl :public AstNode {
-        vector<AstNode*> identifierList;
-        vector<AstNode*> type;
-        vector<AstNode*> expressionList;
-    };
-    struct AstType :public AstNode {
-        union {
-            AstNode* typeName;
-            AstNode* typeLit;
-        }at;
-    };
-    struct AstIdentifierList :public AstNode {
-        vector<string> identifierList;
-    };
-    struct AstTypeName : public AstNode {
-        string typeName;
-    };
-    struct AstTypeLit : public AstNode {
-        union {
-            AstNode* arrayType;
-            AstNode* structType;
-            AstNode* pointerType;
-            AstNode* functionType;
-            AstNode* interfaceType;
-            AstNode* sliceType;
-            AstNode* mapType;
-            AstNode* channelType;
-        }atl;
-    };
-    struct AstArrayType : public AstNode {
-        AstNode* length;
-        AstNode* elementType;
-    };
-    struct AstStructType :public AstNode {
-        union _FieldDecl{
-            struct{
-                AstNode* identifierList;
-                AstNode* type;
-            }named;
-            AstNode* typeName;
-        };
-
-        map<_FieldDecl,string> fields;
-    };
-    struct AstPointerType: public AstNode{
-        AstNode * baseType;
-    };
-    struct AstFunctionType :public AstNode {
-        AstNode * signature;
-    };
-    struct AstSignature :public AstNode {
-        AstNode* parameters;
-        AstNode* result;
-    };
-    struct AstParameter :public AstNode {
-        vector<AstNode*> parameterList;
-    };
-    struct AstParameterDecl :public AstNode {
-        AstNode* identifierList;
-        bool isVariadic=false;
-        AstNode* type;
-    };
-    struct AstResult :public AstNode {
-        union {
-            AstNode* parameter;
-            AstNode* type;
-        }ar;
-    };
-    struct AstInterfaceType :public AstNode {
-        vector<AstNode*> methodSpec;
-    };
-    struct AstMethodSpec :public AstNode {
-        union {
-            struct _MethodSignature{
-                AstNode* methodName;
-                AstNode* signature;
-            }named;
-            AstNode* interfaceTypeName;
-        }ams;
-    };
-    struct AstMethodName :public AstNode {
-        string methodName;
-    };
-    struct AstSliceType :public AstNode {
-        AstNode* elementType;
-    };
-    struct AstMapType :public AstNode {
-        AstNode* keyType;
-        AstNode* elementType;
-    };
-    struct AstChannelType :public AstNode {
-        AstNode* elementType;
-    };
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
@@ -816,8 +797,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-    // TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
-    // SliceType | MapType | ChannelType .
     parseTypeLit = [&](Token&t)->AstNode* {
         AstTypeLit * node = nullptr;
         if (auto*tmp = parseArrayType(t); tmp != nullptr) {
