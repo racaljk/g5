@@ -1270,6 +1270,19 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
+    parseContinueStmt = [&](Token&t)->AstNode* {
+        AstContinueStmt * node = nullptr;
+        if(t.type==KW_continue){
+            node = new AstContinueStmt;
+            t = next(f);
+            if(t.type == TK_ID){
+                node->label = t.lexeme;
+            }else{
+                node->label = nullptr;
+            }
+        }
+        return node;
+    };
     // parsing startup
     return parseSourceFile();
 }
