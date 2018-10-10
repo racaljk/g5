@@ -655,12 +655,16 @@ void parse(const string & filename) {
     struct AstSliceType :public AstNode {
         AstNode* elementType;
     };
+    struct AstMapType :public AstNode {
+        AstNode* keyType;
+        AstNode* elementType;
+    };
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
-        parseMethodSpec, parseMethodName,parseSliceType;
+        parseMethodSpec, parseMethodName, parseSliceType, parseMapType;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -988,8 +992,19 @@ void parse(const string & filename) {
     parseSliceType = [&](Token&t)->AstNode* {
         AstSliceType* node = nullptr;
         if (t.type == OP_LBRACKET) {
-            node = new AstMethodName;
+            node = new AstSliceType;
             expect(OP_RBRACKET, "bracket [] must match in slice type declaration");
+            node->elementType = parseType(t);
+        }
+        return node;
+    };
+    parseMapType = [&](Token&t)->AstNode* {
+        AstMapType* node = nullptr;
+        if (t.type == KW_map) {
+            node = new AstMapType;
+            expect(OP_LBRACKET, "bracket [] must match in map type declaration");
+            node->keyType = parseType(t);
+            expect(OP_RBRACKET, "bracket [] must match in map type declaration");
             node->elementType = parseType(t);
         }
         return node;
