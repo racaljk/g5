@@ -659,12 +659,15 @@ void parse(const string & filename) {
         AstNode* keyType;
         AstNode* elementType;
     };
+    struct AstChannelType :public AstNode {
+        AstNode* elementType;
+    };
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
-        parseMethodSpec, parseMethodName, parseSliceType, parseMapType;
+        parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -1006,6 +1009,28 @@ void parse(const string & filename) {
             node->keyType = parseType(t);
             expect(OP_RBRACKET, "bracket [] must match in map type declaration");
             node->elementType = parseType(t);
+        }
+        return node;
+    };
+    parseChannelType = [&](Token&t)->AstNode* {
+        AstChannelType* node = nullptr;
+        if (t.type == KW_chan) {
+            node = new AstChannelType;
+            t = next(f);
+            if (t.type == OP_CHAN) {
+                t = next(f);
+                node->elementType = parseType(t);
+            }
+            else {
+                node->elementType = parseType(t);
+            }
+        }
+        else if (t.type == OP_CHAN) {
+            node = new AstChannelType;
+            t = next(f);
+            if (t.type == KW_chan) {
+                node->elementType = parseType(t);
+            }
         }
         return node;
     };
