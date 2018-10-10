@@ -645,6 +645,7 @@ void parse(const string & filename) {
             struct _MethodSignature{
                 string methodName;
                 AstNode* signature;
+                _MethodSignature():methodName(),signature(nullptr){}
             }named;
             AstNode* interfaceTypeName;
         }ams;
