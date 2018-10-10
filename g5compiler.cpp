@@ -1345,12 +1345,58 @@ const AstNode* parse(const string & filename) {
     };
     parseSwitchStmt = [&](Token&t)->AstNode* {
         AstSwitchStmt* node = nullptr;
-        //todo
+        if (t.type == KW_switch) {
+            node = new AstSwitchStmt;
+            if (auto*tmp = parseSimpleStatement(t); tmp != nullptr) {
+                node->condition = tmp;
+                expect(OP_SEMI, "expect semicolon in switch condition");
+                if (auto*tmp1 = parseExpression(t); tmp1 != nullptr) {
+                    node->conditionExpr = tmp1;
+                    t = next(f);
+                }
+               
+            }
+            expect(OP_LBRACE, "expect left brace around case clauses");
+            do {
+                if (auto*tmp = parseExprCaseClause(t); tmp != nullptr) {
+                    node->exprCaseClause.push_back(tmp);
+                }
+                t = next(f);
+            } while (t.type != OP_RBRACE);
+        }
+        return node;
+    };
+    parseExprCaseClause = [&](Token&t)->AstNode* {
+        AstExprCaseClause* node = nullptr;
+        if (auto*tmp = parseExprSwitchCase(t); tmp != nullptr) {
+            node = new AstExprCaseClause;
+            node->exprSwitchCase = tmp;
+            expect(OP_COLON, "expect colon in case clause of switch");
+            node->statementList = parseStatementList(t);
+        }
+        return node;
+    };
+    parseExprSwitchCase = [&](Token&t)->AstNode* {
+        AstExprSwitchCase* node = nullptr;
+        if (t.type == KW_case) {
+            node = new AstExprSwitchCase;
+            t = next(f);
+            if (auto*tmp = parseExpressionList(t); tmp != nullptr) {
+                node->expressionList = tmp;
+            }
+            else if (t.type == KW_default) {
+                node->isDefault = true;
+            }
+        }
         return node;
     };
     parseSelectStmt = [&](Token&t)->AstNode* {
         AstSelectStmt* node = nullptr;
-        //todo
+        if (t.type == KW_select) {
+            node = new AstSelectStmt;
+            expect(OP_LBRACE, "expect left brace in select statement");
+
+        }
         return node;
     };
     parseForStmt = [&](Token&t)->AstNode* {
