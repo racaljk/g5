@@ -29,7 +29,7 @@ string keywords[] = { "break",    "default",     "func",   "interface", "select"
                      "const",    "fallthrough", "if",     "range",     "type",
                      "continue", "for",         "import", "return",    "var" };
 
-enum TokenType : signed int{
+enum TokenType : signed int {
     KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case, KW_defer,
     KW_go, KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package, KW_switch,
     KW_const, KW_fallthrough, KW_if, KW_range, KW_type, KW_continue, KW_for,
@@ -120,7 +120,7 @@ struct AstSignature :public AstNode {
     AstNode* parameters;
     AstNode* result;
 };
-struct AstParameter :public AstNode { vector<AstNode*> parameterList;};
+struct AstParameter :public AstNode { vector<AstNode*> parameterList; };
 struct AstParameterDecl :public AstNode {
     AstNode* identifierList;
     bool isVariadic = false;
@@ -149,15 +149,20 @@ struct AstMapType :public AstNode {
     AstNode* elementType;
 };
 struct AstChannelType :public AstNode { AstNode* elementType; };
+struct AstTypeDecl :public AstNode { vector<AstNode*> typeSpec; };
+struct AstTypeSpec :public AstNode {
+    string identifier;
+    AstNode* type;
+};
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
 static int line = 1, column = 1, lastToken = -1, shouldEof = 0;
-struct Token { 
-    TokenType type; string lexeme; 
-    Token(TokenType a, const string&b) :type(a), lexeme(b) {} 
+struct Token {
+    TokenType type; string lexeme;
+    Token(TokenType a, const string&b) :type(a), lexeme(b) {}
 };
-static struct goruntime{
+static struct goruntime {
     string package;
 } grt;
 
@@ -166,14 +171,14 @@ static struct goruntime{
 //===----------------------------------------------------------------------===//
 
 Token next(fstream& f) {
-     auto consumePeek = [&](char& c) {
-            f.get();
-            column++;
-            char oc = c;
-            c = f.peek();
-            return oc;
-        };
-     char c = f.peek();
+    auto consumePeek = [&](char& c) {
+        f.get();
+        column++;
+        char oc = c;
+        c = f.peek();
+        return oc;
+    };
+    char c = f.peek();
 
 skip_comment_and_find_next:
 
@@ -181,11 +186,11 @@ skip_comment_and_find_next:
         if (c == '\n') {
             line++;
             column = 1;
-            if ((lastToken >= TK_ID && lastToken <= LITERAL_STR) 
-                || lastToken == KW_fallthrough||lastToken == KW_continue
+            if ((lastToken >= TK_ID && lastToken <= LITERAL_STR)
+                || lastToken == KW_fallthrough || lastToken == KW_continue
                 || lastToken == KW_return || lastToken == KW_break
-                ||lastToken == OP_INC || lastToken == OP_DEC 
-                || lastToken == OP_RPAREN 
+                || lastToken == OP_INC || lastToken == OP_DEC
+                || lastToken == OP_RPAREN
                 || lastToken == OP_RBRACKET || lastToken == OP_RBRACE) {
                 consumePeek(c);
                 lastToken = OP_SEMI;
@@ -203,7 +208,7 @@ skip_comment_and_find_next:
     }
 
     string lexeme;
-   
+
 
     // identifier = letter { letter | unicode_digit } .
     if (isalpha(c) || c == '_') {
@@ -243,7 +248,7 @@ skip_comment_and_find_next:
                 return Token(LITERAL_INT, lexeme);
             }
             else if ((c >= '0' && c <= '9') ||
-                    (c == '.' || c == 'e' || c == 'E' || c == 'i')) {
+                (c == '.' || c == 'e' || c == 'E' || c == 'i')) {
                 while ((c >= '0' && c <= '9') ||
                     (c == '.' || c == 'e' || c == 'E' || c == 'i')) {
                     if (c >= '0' && c <= '7') {
@@ -634,7 +639,7 @@ skip_comment_and_find_next:
     throw runtime_error("illegal token in source file");
 }
 
-void parse(const string & filename) {
+const AstNode* parse(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
 
     auto expect = [&f](TokenType tk, const string& msg) {
@@ -648,8 +653,24 @@ void parse(const string & filename) {
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
-        parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType;
+        parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType,
+        parseTypeDecl, parseTypeSpec;
 
+    parseIdentifierList = [&](Token&t)->AstNode* {
+        AstIdentifierList* node = nullptr;
+        if (t.type = TK_ID) {
+            node = new  AstIdentifierList;
+            node->identifierList.emplace_back(t.lexeme);
+            t = next(f);
+            if (t.type == OP_COMMA)
+                while (t.type == OP_COMMA) {
+                    node->identifierList.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme);
+                    t = next(f);
+                }
+        }
+
+        return node;
+    };
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
         auto t = next(f);
@@ -662,7 +683,6 @@ void parse(const string & filename) {
             node->importDecl.push_back(parseImportDecl(t));
             t = next(f);
         }
-        // todo: fix TK_EOF producing bug
         while (t.type != TK_EOF) {
             node->topLevelDecl.push_back(parseTopLevelDecl(t));
         }
@@ -718,7 +738,8 @@ void parse(const string & filename) {
         if (auto* tmp = parseDeclaration(t); tmp != nullptr) {
             node = new AstTopLevelDecl;
             node->atld.decl = tmp;
-        }else if (auto* tmp = parseFunctionDecl(t); tmp != nullptr) {
+        }
+        else if (auto* tmp = parseFunctionDecl(t); tmp != nullptr) {
             node = new AstTopLevelDecl;
             node->atld.functionDecl = tmp;
         }
@@ -733,11 +754,13 @@ void parse(const string & filename) {
         // Declaration   = ConstDecl | TypeDecl | VarDecl .
         if (auto*tmp = parseConstDecl(t); tmp != nullptr) {
             node = new AstDeclaration;
-            node->ad.constDecl=tmp;
-        }else  if (auto*tmp = parseTypeDecl(t); tmp != nullptr) {
+            node->ad.constDecl = tmp;
+        }
+        else  if (auto*tmp = parseTypeDecl(t); tmp != nullptr) {
             node = new AstDeclaration;
             node->ad.typeDecl = tmp;
-        }else  if (auto*tmp = parseVarDecl(t); tmp != nullptr) {
+        }
+        else  if (auto*tmp = parseVarDecl(t); tmp != nullptr) {
             node = new AstDeclaration;
             node->ad.varDecl = tmp;
         }
@@ -775,7 +798,7 @@ void parse(const string & filename) {
             node = new AstType;
             node->at.typeLit = tmp;
         }
-        else  if (t.type==OP_LPAREN) {
+        else  if (t.type == OP_LPAREN) {
             t = next(f);
             node = dynamic_cast<AstType*>(parseType(t));
             expect(OP_RPAREN, "the parenthesis () must match in type declaration");
@@ -848,24 +871,25 @@ void parse(const string & filename) {
         if (t.type == KW_struct) {
             node = new  AstStructType;
             expect(OP_LBRACE, "left brace { must exist in struct type declaration");
-            do{
+            do {
                 AstStructType::_FieldDecl fd;
-                if(auto * tmp = parseIdentifierList(t);tmp!=nullptr){
+                if (auto * tmp = parseIdentifierList(t); tmp != nullptr) {
                     fd.named.identifierList = tmp;
                     fd.named.type = parseType(t);
-                }else{
-                    if(t.type==OP_MUL){
-                        t=next(f);
+                }
+                else {
+                    if (t.type == OP_MUL) {
+                        t = next(f);
                     }
-                    fd.typeName = parseTypeName(t);        
+                    fd.typeName = parseTypeName(t);
                 }
                 string tag;
-                if(t.type==LITERAL_STR){
+                if (t.type == LITERAL_STR) {
                     tag = t.lexeme;
                 }
                 node->fields[fd] = tag;
-            }while(t.type!=OP_RBRACE);
-      }
+            } while (t.type != OP_RBRACE);
+        }
         return node;
     };
     parsePointerType = [&](Token&t)->AstNode* {
@@ -898,7 +922,7 @@ void parse(const string & filename) {
         if (t.type == OP_LPAREN) {
             node = new AstParameter;
             do {
-                if (auto * tmp = parseParameterDecl(t);tmp!=nullptr) {
+                if (auto * tmp = parseParameterDecl(t); tmp != nullptr) {
                     node->parameterList.push_back(tmp);
                 }
                 if (t.type == OP_COMMA) {
@@ -1013,18 +1037,38 @@ void parse(const string & filename) {
         }
         return node;
     };
-    parseIdentifierList = [&](Token&t)->AstNode* {
-        auto* node = new AstIdentifierList;
-        node->identifierList.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme);
-        t = next(f);
-        if (t.type == OP_COMMA)
-            while (t.type == OP_COMMA) {
-                node->identifierList.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme);
-                t = next(f);
+    parseTypeDecl = [&](Token&t)->AstNode* {
+        AstTypeDecl* node = nullptr;
+        if (t.type == KW_type) {
+            node = new AstTypeDecl;
+            t = next(f);
+            if (t.type == OP_LPAREN) {
+                do {
+                    node->typeSpec.push_back(parseTypeSpec(t));
+                    expect(OP_SEMI, "expect a semicolon after each type specification");
+                } while (t.type != OP_RPAREN);
             }
-
+            else {
+                node->typeSpec.push_back(parseTypeSpec(t));
+            }
+        }
         return node;
     };
+    parseTypeSpec = [&](Token&t)->AstNode* {
+        AstTypeSpec* node = nullptr;
+        if (t.type == TK_ID) {
+            node = new AstTypeSpec;
+            node->identifier = t.lexeme;
+            t = next(f);
+            if (t.type == OP_EQ) {
+                t = next(f);
+            }
+            node->type = parseType(t);
+        }
+        return node;
+    };
+    // parsing startup
+    return parseSourceFile();
 }
 
 void emitStub() {}
