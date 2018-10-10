@@ -1249,7 +1249,14 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-
+    parseReturnStmt = [&](Token&t)->AstNode* {
+        AstReturnStmt * node = nullptr;
+        if(t.type==KW_return){
+            node = new AstReturnStmt;
+            node->expression = parseExpressionList(t);
+        }
+        return node;
+    };
     // parsing startup
     return parseSourceFile();
 }
