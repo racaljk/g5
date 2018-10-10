@@ -1253,7 +1253,20 @@ const AstNode* parse(const string & filename) {
         AstReturnStmt * node = nullptr;
         if(t.type==KW_return){
             node = new AstReturnStmt;
-            node->expression = parseExpressionList(t);
+            node->expressionList = parseExpressionList(t);
+        }
+        return node;
+    };
+    parseBreakStmt = [&](Token&t)->AstNode* {
+        AstBreakStmt * node = nullptr;
+        if(t.type==KW_break){
+            node = new AstBreakStmt;
+            t = next(f);
+            if(t.type == TK_ID){
+                node->label = t.lexeme;
+            }else{
+                node->label = nullptr;
+            }
         }
         return node;
     };
