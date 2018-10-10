@@ -643,12 +643,14 @@ void parse(const string & filename) {
     struct AstMethodSpec :public AstNode {
         union {
             struct _MethodSignature{
-                string methodName;
+                AstNode* methodName;
                 AstNode* signature;
-                _MethodSignature():methodName(),signature(nullptr){}
             }named;
             AstNode* interfaceTypeName;
         }ams;
+    };
+    struct AstMethodName :public AstNode {
+        string methodName;
     };
 
     function<AstNode*()> parseSourceFile;
@@ -656,7 +658,7 @@ void parse(const string & filename) {
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
-        parseMethodSpec;
+        parseMethodSpec, parseMethodName;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -962,14 +964,22 @@ void parse(const string & filename) {
     };
     parseMethodSpec = [&](Token&t)->AstNode* {
         AstMethodSpec* node = nullptr;
-        if (t.type==TK_ID) {
+        if (auto*tmp = parseMethodName(t); tmp != nullptr) {
             node = new AstMethodSpec;
-            node->ams.named.methodName = t.lexeme;
+            node->ams.named.methodName = tmp;
             node->ams.named.signature = parseSignature(t);
         }
         else  if (auto*tmp = parseTypeName(t); tmp != nullptr) {
             node = new AstMethodSpec;
             node->ams.interfaceTypeName = tmp;
+        }
+        return node;
+    };
+    parseMethodName = [&](Token&t)->AstNode* {
+        AstMethodName* node = nullptr;
+        if (t.type == TK_ID) {
+            node = new AstMethodName;
+            node->methodName = t.lexeme;
         }
         return node;
     };
