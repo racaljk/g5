@@ -1228,16 +1228,28 @@ const AstNode* parse(const string & filename) {
     };
     parseLabeledStmt = [&](Token&t)->AstNode* {
         AstLabeledStmt * node = nullptr;
-        if (auto*tmp = parseDeclaration(t); tmp != nullptr) {
-            node = new AstStatement;
-            node->as.declaration = tmp;
-        }
-        else  if (auto*tmp = parseType(t); tmp != nullptr) {
-            node = new AstResult;
-            node->ar.type = tmp;
+        if(t.type==TK_ID){
+            node = new AstLabeledStmt;
+            node->identifier = t.lexeme;
+            expect(OP_COLON,"label statement should have a colon");
+            node->statement = parseStatement(t);
         }
         return node;
     };
+    parseSimpleStmt = [&](Token&t)->AstNode* {
+        AstSimpleStmt * node = nullptr;
+        //todo
+        return node;
+    };
+    parseGoStmt = [&](Token&t)->AstNode* {
+        AstGoStmt * node = nullptr;
+        if(t.type==KW_go){
+            node = new AstGoStmt;
+            node->expression = parseExpression(t);
+        }
+        return node;
+    };
+
     // parsing startup
     return parseSourceFile();
 }
