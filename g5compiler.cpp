@@ -1347,6 +1347,32 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
+    // simple statement
+    parseEmptyStmt | = [&](Token&t)->AstNode* {
+        AstEmptyStmt* node = nullptr;
+        return node;
+    };
+    parseExpressionStmt | = [&](Token&t)->AstNode* {
+        AstExpressionStmt* node = nullptr;
+        return node;
+    };
+    parseSendStmt | = [&](Token&t)->AstNode* {
+        AstSendStmt* node = nullptr;
+        return node;
+    };
+    parseIncDecStmt | = [&](Token&t)->AstNode* {
+        AstIncDecStmt* node = nullptr;
+        return node;
+    };
+    parseAssignment | = [&](Token&t)->AstNode* {
+        AstAssignment* node = nullptr;
+        return node;
+    };
+    parseShortVarDecl | = [&](Token&t)->AstNode* {
+        AstShortVarDecl* node = nullptr;
+        return node;
+    };
+
     // parsing startup
     return parseSourceFile();
 }
