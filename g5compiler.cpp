@@ -652,13 +652,15 @@ void parse(const string & filename) {
     struct AstMethodName :public AstNode {
         string methodName;
     };
-
+    struct AstSliceType :public AstNode {
+        AstNode* elementType;
+    };
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
-        parseMethodSpec, parseMethodName;
+        parseMethodSpec, parseMethodName,parseSliceType;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -983,7 +985,15 @@ void parse(const string & filename) {
         }
         return node;
     };
-
+    parseSliceType = [&](Token&t)->AstNode* {
+        AstSliceType* node = nullptr;
+        if (t.type == OP_LBRACKET) {
+            node = new AstMethodName;
+            expect(OP_RBRACKET, "bracket [] must match in slice type declaration");
+            node->elementType = parseType(t);
+        }
+        return node;
+    };
     parseIdentifierList = [&](Token&t)->AstNode* {
         auto* node = new AstIdentifierList;
         node->identifierList.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme);
