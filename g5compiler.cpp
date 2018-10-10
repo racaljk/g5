@@ -46,7 +46,7 @@ enum TokenType : signed int{
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
-static int line = 1, column = 1, lastToken = -1;
+static int line = 1, column = 1, lastToken = -1, shouldEof = 0;
 struct Token { 
     TokenType type; string lexeme; 
     Token(TokenType a, const string&b) :type(a), lexeme(b) {} 
@@ -78,7 +78,8 @@ skip_comment_and_find_next:
             if ((lastToken >= TK_ID && lastToken <= LITERAL_STR) 
                 || lastToken == KW_fallthrough||lastToken == KW_continue
                 || lastToken == KW_return || lastToken == KW_break
-                ||lastToken == OP_INC || lastToken == OP_DEC || lastToken == OP_RPAREN 
+                ||lastToken == OP_INC || lastToken == OP_DEC 
+                || lastToken == OP_RPAREN 
                 || lastToken == OP_RBRACKET || lastToken == OP_RBRACE) {
                 consumePeek(c);
                 lastToken = OP_SEMI;
@@ -88,6 +89,10 @@ skip_comment_and_find_next:
         consumePeek(c);
     }
     if (f.eof()) {
+        if (shouldEof) {
+            return Token(TK_EOF, "");
+        }
+        shouldEof = 1;
         return Token(OP_SEMI, ";");
     }
 
@@ -619,14 +624,25 @@ void parse(const string & filename) {
         AstNode* result;
     };
     struct AstParameter :public AstNode {
-
+        vector<AstNode*> parameterList;
+    };
+    struct AstParameterDecl :public AstNode {
+        AstNode* identifierList;
+        bool isVariadic=false;
+        AstNode* type;
+    };
+    struct AstResult :public AstNode {
+        union {
+            AstNode* parameter;
+            AstNode* type;
+        }ar;
     };
 
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
-        parseSignature, parseParameter, parseResult;
+        parseSignature, parseParameter, parseParameterDecl, parseResult;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -880,13 +896,46 @@ void parse(const string & filename) {
     parseParameter = [&](Token&t)->AstNode* {
         AstParameter* node = nullptr;
         if (t.type == OP_LPAREN) {
-            node = new AstSignature;
-            node->parameters = parseParameter(t);
-            node->result = parseResult(t);
+            node = new AstParameter;
+            do {
+                if (auto * tmp = parseParameterDecl(t);tmp!=nullptr) {
+                    node->parameterList.push_back(tmp);
+                }
+                if (t.type == OP_COMMA) {
+                    t = next(f);
+                }
+            } while (t.type != OP_RPAREN);
+        }
+        return node;
+    }
+    parseParameterDecl = [&](Token&t)->AstNode* {
+        AstParameterDecl* node = nullptr;
+        if (auto*tmp = parseIdentifierList(t); tmp != nullptr) {
+            node = new AstParameterDecl;
+            node->identifierList = tmp;
+        }
+        if (t.type == OP_VARIADIC) {
+            node = new AstParameterDecl;
+            node->isVariadic = true;
+        }
+        if (auto*tmp = parseType(t); tmp != nullptr) {
+            node = new AstParameterDecl;
+            node->type = tmp;
         }
         return node;
     };
-    
+    parseResult = [&](Token&t)->AstNode* {
+        AstResult* node = nullptr;
+        if (auto*tmp = parseParameter(t); tmp != nullptr) {
+            node = new AstResult;
+            node->ar.parameter = tmp;
+        }
+        else  if (auto*tmp = parseType(t); tmp != nullptr) {
+            node = new AstResult;
+            node->ar.type = tmp;
+        }
+        return node;
+    };
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         auto* node = new AstIdentifierList;
