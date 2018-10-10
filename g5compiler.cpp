@@ -169,6 +169,58 @@ struct AstStatement : public AstNode {
         AstNode* labeledStmt;
     }as;
 };
+struct AstLabledStatement : public AstNode {
+    string identifier;
+    AstNode* statement;
+};
+struct AstSimpleStatement : public AstNode {
+    union {
+        AstNode* expressionStmt;
+        AstNode* sendStmt;
+        AstNode* incDecStmt;
+        AstNode* assignment;
+        AstNode* shortVarDecl;
+    }ass;
+};
+struct AstGoStmt : public AstNode {
+    AstNode* expression;
+};
+struct AstReturnStmt : public AstNode {
+    AstNode* expressionList;
+};
+struct AstBreakStmt : public AstNode {
+    string labe;
+};
+struct AstContinueStmt : public AstNode {
+    string label;
+};
+struct AstGotoStmt : public AstNode {
+    string label;
+};
+struct AstFallthroughStmt : public AstNode {};
+struct AstIfStmt :public AstNode {
+    AstNode* condition;
+    AstNode* expression;
+    AstNode* block;
+    union {
+        AstNode* ifStmt;
+        AstNode* block;
+    }ais;
+};
+struct AstSwitchStmt :public AstNode {
+    AstNode* condition;
+    AstNode* conditionExpr;
+    vector<AstNode*> exprCaseClause;
+};
+struct AstExprCaseClause : public AstNode {
+    AstNode* exprSwitchCase;
+    AstNode* statementList;
+};
+struct AstExprSwitchCase : public AstNode {
+    AstNode * expressionList;
+    bool isDefault;
+};
+
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
@@ -1333,9 +1385,9 @@ const AstNode* parse(const string & filename) {
             if(t.type==KW_else){
                 t=next(f);
                 if(auto *tmp1=parseIfStmt(T);tmp1!=nullptr){
-                    node->else = tmp;
+                    node->ais.ifStmt = tmp;
                 }else if(auto *tmp1=parseBlock(T);tmp1!=nullptr){
-                    node->else = tmp1;
+                    node->ais.block = tmp1;
                 }else{
                     throw runtime_error("else is empty");
                 }
