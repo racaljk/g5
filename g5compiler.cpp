@@ -42,11 +42,117 @@ enum TokenType : signed int{
     OP_NOT, OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORAGN, TK_ID,
     LITERAL_INT, LITERAL_FLOAT, LITERAL_IMG, LITERAL_RUNE, LITERAL_STR, TK_EOF
 };
+struct AstNode { virtual ~AstNode() {} };
+struct AstSourceFile :public AstNode {
+    AstNode* packageClause;
+    vector<AstNode*> importDecl;
+    vector<AstNode*> topLevelDecl;
+};
+struct AstPackageClause :public AstNode { string packageName; };
+struct AstImportDecl :public AstNode { map<string, string> imports; };
 
+struct AstTopLevelDecl :public AstNode {
+    union {
+        AstNode* decl;
+        AstNode* functionDecl;
+        AstNode* methodDecl;
+    }atld;
+};
+
+struct AstFunctionDecl :public AstNode {
+
+};
+
+struct AstMethodDecl : public AstNode {
+
+};
+
+struct AstDeclaration :public AstNode {
+    union {
+        AstNode* constDecl;
+        AstNode* typeDecl;
+        AstNode* varDecl;
+    }ad;
+};
+struct AstConstDecl :public AstNode {
+    vector<AstNode*> identifierList;
+    vector<AstNode*> type;
+    vector<AstNode*> expressionList;
+};
+struct AstType :public AstNode {
+    union {
+        AstNode* typeName;
+        AstNode* typeLit;
+    }at;
+};
+struct AstIdentifierList :public AstNode { vector<string> identifierList; };
+struct AstTypeName : public AstNode { string typeName; };
+struct AstTypeLit : public AstNode {
+    union {
+        AstNode* arrayType;
+        AstNode* structType;
+        AstNode* pointerType;
+        AstNode* functionType;
+        AstNode* interfaceType;
+        AstNode* sliceType;
+        AstNode* mapType;
+        AstNode* channelType;
+    }atl;
+};
+struct AstArrayType : public AstNode {
+    AstNode* length;
+    AstNode* elementType;
+};
+struct AstStructType :public AstNode {
+    union _FieldDecl {
+        struct {
+            AstNode* identifierList;
+            AstNode* type;
+        }named;
+        AstNode* typeName;
+    };
+
+    map<_FieldDecl, string> fields;
+};
+struct AstPointerType : public AstNode { AstNode * baseType; };
+struct AstFunctionType :public AstNode { AstNode * signature; };
+struct AstSignature :public AstNode {
+    AstNode* parameters;
+    AstNode* result;
+};
+struct AstParameter :public AstNode { vector<AstNode*> parameterList;};
+struct AstParameterDecl :public AstNode {
+    AstNode* identifierList;
+    bool isVariadic = false;
+    AstNode* type;
+};
+struct AstResult :public AstNode {
+    union {
+        AstNode* parameter;
+        AstNode* type;
+    }ar;
+};
+struct AstInterfaceType :public AstNode { vector<AstNode*> methodSpec; };
+struct AstMethodSpec :public AstNode {
+    union {
+        struct _MethodSignature {
+            AstNode* methodName;
+            AstNode* signature;
+        }named;
+        AstNode* interfaceTypeName;
+    }ams;
+};
+struct AstMethodName :public AstNode { string methodName; };
+struct AstSliceType :public AstNode { AstNode* elementType; };
+struct AstMapType :public AstNode {
+    AstNode* keyType;
+    AstNode* elementType;
+};
+struct AstChannelType :public AstNode { AstNode* elementType; };
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
-static int line = 1, column = 1, lastToken = -1;
+static int line = 1, column = 1, lastToken = -1, shouldEof = 0;
 struct Token { 
     TokenType type; string lexeme; 
     Token(TokenType a, const string&b) :type(a), lexeme(b) {} 
@@ -78,7 +184,8 @@ skip_comment_and_find_next:
             if ((lastToken >= TK_ID && lastToken <= LITERAL_STR) 
                 || lastToken == KW_fallthrough||lastToken == KW_continue
                 || lastToken == KW_return || lastToken == KW_break
-                ||lastToken == OP_INC || lastToken == OP_DEC || lastToken == OP_RPAREN 
+                ||lastToken == OP_INC || lastToken == OP_DEC 
+                || lastToken == OP_RPAREN 
                 || lastToken == OP_RBRACKET || lastToken == OP_RBRACE) {
                 consumePeek(c);
                 lastToken = OP_SEMI;
@@ -88,6 +195,10 @@ skip_comment_and_find_next:
         consumePeek(c);
     }
     if (f.eof()) {
+        if (shouldEof) {
+            return Token(TK_EOF, "");
+        }
+        shouldEof = 1;
         return Token(OP_SEMI, ";");
     }
 
@@ -532,100 +643,12 @@ void parse(const string & filename) {
         return t;
     };
 
-    struct AstNode { virtual ~AstNode() {} };
-    struct AstSourceFile :public AstNode {
-        AstNode* packageClause;
-        vector<AstNode*> importDecl;
-        vector<AstNode*> topLevelDecl;
-    };
-    struct AstPackageClause :public AstNode { string packageName; };
-    struct AstImportDecl :public AstNode { map<string, string> imports; };
-
-    struct AstTopLevelDecl :public AstNode {
-        union {
-            AstNode* decl;
-            AstNode* functionDecl;
-            AstNode* methodDecl;
-        }atld;
-    };
-
-    struct AstFunctionDecl :public AstNode {
-
-    };
-
-    struct AstMethodDecl : public AstNode {
-
-    };
-
-    struct AstDeclaration :public AstNode {
-        union {
-            AstNode* constDecl;
-            AstNode* typeDecl;
-            AstNode* varDecl;
-        }ad;
-    };    
-    struct AstConstDecl :public AstNode {
-        vector<AstNode*> identifierList;
-        vector<AstNode*> type;
-        vector<AstNode*> expressionList;
-    };
-    struct AstType :public AstNode {
-        union {
-            AstNode* typeName;
-            AstNode* typeLit;
-        }at;
-    };
-    struct AstIdentifierList :public AstNode {
-        vector<string> identifierList;
-    };
-    struct AstTypeName : public AstNode {
-        string typeName;
-    };
-    struct AstTypeLit : public AstNode {
-        union {
-            AstNode* arrayType;
-            AstNode* structType;
-            AstNode* pointerType;
-            AstNode* functionType;
-            AstNode* interfaceType;
-            AstNode* sliceType;
-            AstNode* mapType;
-            AstNode* channelType;
-        }atl;
-    };
-    struct AstArrayType : public AstNode {
-        AstNode* length;
-        AstNode* elementType;
-    };
-    struct AstStructType :public AstNode {
-        union _FieldDecl{
-            struct{
-                AstNode* identifierList;
-                AstNode* type;
-            }named;
-            AstNode* typeName;
-        };
-
-        map<_FieldDecl,string> fields;
-    };
-    struct AstPointerType: public AstNode{
-        AstNode * baseType;
-    };
-    struct AstFunctionType :public AstNode {
-        AstNode * signature;
-    };
-    struct AstSignature :public AstNode {
-        AstNode* parameters;
-        AstNode* result;
-    };
-    struct AstParameter :public AstNode {
-   
-    };
-
     function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
-        parseDeclaration, parseConstDecl, parseIdentifierList,parseType, parseTypeName,
-        parseTypeLit,parseArrayType,parseStructType, parsePointerType,parseFunctionType;
+        parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
+        parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
+        parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
+        parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType;
 
     parseSourceFile = [&]()->AstNode* {
         auto node = new AstSourceFile;
@@ -774,8 +797,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-    // TypeLit = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
-    // SliceType | MapType | ChannelType .
     parseTypeLit = [&](Token&t)->AstNode* {
         AstTypeLit * node = nullptr;
         if (auto*tmp = parseArrayType(t); tmp != nullptr) {
@@ -812,7 +833,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
     parseArrayType = [&](Token&t)->AstNode* {
         AstArrayType* node = nullptr;
         if (t.type == OP_LBRACKET) {
@@ -823,7 +843,6 @@ void parse(const string & filename) {
         }
         return node;
     };
-
     parseStructType = [&](Token&t)->AstNode* {
         AstStructType* node = nullptr;
         if (t.type == KW_struct) {
@@ -849,7 +868,6 @@ void parse(const string & filename) {
       }
         return node;
     };
-
     parsePointerType = [&](Token&t)->AstNode* {
         AstPointerType* node = nullptr;
         if (t.type == OP_MUL) {
@@ -858,21 +876,143 @@ void parse(const string & filename) {
         }
         return node;
     };
-
     parseFunctionType = [&](Token&t)->AstNode* {
         AstFunctionType* node = nullptr;
         if (t.type == KW_func) {
+            node = new AstFunctionType;
+            node->signature = parseSignature(t);
         }
         return node;
     };
     parseSignature = [&](Token&t)->AstNode* {
-        AstFunctionType* node = nullptr;
-        if (t.type == KW_func) {
+        AstSignature* node = nullptr;
+        if (t.type == OP_LPAREN) {
+            node = new AstSignature;
+            node->parameters = parseParameter(t);
+            node->result = parseResult(t);
         }
         return node;
     };
-    
+    parseParameter = [&](Token&t)->AstNode* {
+        AstParameter* node = nullptr;
+        if (t.type == OP_LPAREN) {
+            node = new AstParameter;
+            do {
+                if (auto * tmp = parseParameterDecl(t);tmp!=nullptr) {
+                    node->parameterList.push_back(tmp);
+                }
+                if (t.type == OP_COMMA) {
+                    t = next(f);
+                }
+            } while (t.type != OP_RPAREN);
+        }
+        return node;
+    };
+    parseParameterDecl = [&](Token&t)->AstNode* {
+        AstParameterDecl* node = nullptr;
+        if (auto*tmp = parseIdentifierList(t); tmp != nullptr) {
+            node = new AstParameterDecl;
+            node->identifierList = tmp;
+        }
+        if (t.type == OP_VARIADIC) {
+            node = new AstParameterDecl;
+            node->isVariadic = true;
+        }
+        if (auto*tmp = parseType(t); tmp != nullptr) {
+            node = new AstParameterDecl;
+            node->type = tmp;
+        }
+        return node;
+    };
+    parseResult = [&](Token&t)->AstNode* {
+        AstResult* node = nullptr;
+        if (auto*tmp = parseParameter(t); tmp != nullptr) {
+            node = new AstResult;
+            node->ar.parameter = tmp;
+        }
+        else  if (auto*tmp = parseType(t); tmp != nullptr) {
+            node = new AstResult;
+            node->ar.type = tmp;
+        }
+        return node;
+    };
+    parseInterfaceType = [&](Token&t)->AstNode* {
+        AstInterfaceType* node = nullptr;
+        if (t.type == OP_LBRACE) {
+            do {
+                if (auto*tmp = parseMethodSpec(t); tmp != nullptr) {
+                    node = new AstInterfaceType;
+                    node->methodSpec.push_back(tmp);
+                    expect(OP_SEMI, "expect a semicolon after method specification");
+                }
+            } while (t.type != OP_RBRACE);
+        }
 
+        return node;
+    };
+    parseMethodSpec = [&](Token&t)->AstNode* {
+        AstMethodSpec* node = nullptr;
+        if (auto*tmp = parseMethodName(t); tmp != nullptr) {
+            node = new AstMethodSpec;
+            node->ams.named.methodName = tmp;
+            node->ams.named.signature = parseSignature(t);
+        }
+        else  if (auto*tmp = parseTypeName(t); tmp != nullptr) {
+            node = new AstMethodSpec;
+            node->ams.interfaceTypeName = tmp;
+        }
+        return node;
+    };
+    parseMethodName = [&](Token&t)->AstNode* {
+        AstMethodName* node = nullptr;
+        if (t.type == TK_ID) {
+            node = new AstMethodName;
+            node->methodName = t.lexeme;
+        }
+        return node;
+    };
+    parseSliceType = [&](Token&t)->AstNode* {
+        AstSliceType* node = nullptr;
+        if (t.type == OP_LBRACKET) {
+            node = new AstSliceType;
+            expect(OP_RBRACKET, "bracket [] must match in slice type declaration");
+            node->elementType = parseType(t);
+        }
+        return node;
+    };
+    parseMapType = [&](Token&t)->AstNode* {
+        AstMapType* node = nullptr;
+        if (t.type == KW_map) {
+            node = new AstMapType;
+            expect(OP_LBRACKET, "bracket [] must match in map type declaration");
+            node->keyType = parseType(t);
+            expect(OP_RBRACKET, "bracket [] must match in map type declaration");
+            node->elementType = parseType(t);
+        }
+        return node;
+    };
+    parseChannelType = [&](Token&t)->AstNode* {
+        AstChannelType* node = nullptr;
+        if (t.type == KW_chan) {
+            node = new AstChannelType;
+            t = next(f);
+            if (t.type == OP_CHAN) {
+                t = next(f);
+                node->elementType = parseType(t);
+            }
+            else {
+                node->elementType = parseType(t);
+            }
+        }
+        else if (t.type == OP_CHAN) {
+            node = new AstChannelType;
+            t = next(f);
+            if (t.type == KW_chan) {
+                node->elementType = parseType(t);
+            }
+        }
+        return node;
+    };
     parseIdentifierList = [&](Token&t)->AstNode* {
         auto* node = new AstIdentifierList;
         node->identifierList.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme);
