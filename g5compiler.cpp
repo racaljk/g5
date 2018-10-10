@@ -164,7 +164,10 @@ struct AstFunctionBody : public AstNode { AstNode* block; };
 struct AstBlock :public AstNode { AstNode* statementList; };
 struct AstStatementList : public AstNode { vector<AstNode*> statements; };
 struct AstStatement : public AstNode {
-    // todo
+    union {
+        AstNode* declaration;
+        AstNode* labeledStmt;
+    }as;
 };
 //===----------------------------------------------------------------------===//
 // global data
@@ -1161,7 +1164,78 @@ const AstNode* parse(const string & filename) {
     };
     parseStatement = [&](Token&t)->AstNode* {
         AstStatement * node = nullptr;
-        //todo
+        if (auto*tmp = parseDeclaration(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.declaration = tmp;
+        }
+        else  if (auto*tmp = parseLabeledStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.labeledStmt = tmp;
+        }
+        else  if (auto*tmp = parseSimpleStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.simpleStmt = tmp;
+        }
+        else  if (auto*tmp = parseGoStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.goStmt = tmp;
+        }
+        else  if (auto*tmp = parseReturnStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.returnStmt = tmp;
+        }
+        else  if (auto*tmp = parseBreakStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.breakStmt = tmp;
+        }
+        else  if (auto*tmp = parseContinueStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.continueStmt = tmp;
+        }
+        else  if (auto*tmp = parseGotoStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.gotoStmt = tmp;
+        }
+        else  if (auto*tmp = parseFallthroughStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.fallthroughStmt = tmp;
+        }
+        else  if (auto*tmp = parseBlock(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.block = tmp;
+        }
+        else  if (auto*tmp = parseIfStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.ifStmt = tmp;
+        }
+        else  if (auto*tmp = parseSwitchStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.switchStmt = tmp;
+        }
+        else  if (auto*tmp = parseSelectStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.selectStmt = tmp;
+        }
+        else  if (auto*tmp = parseForStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.forStmt = tmp;
+        }
+        else  if (auto*tmp = parseDeferStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.deferStmt = tmp;
+        }
+        return node;
+    };
+    parseLabeledStmt = [&](Token&t)->AstNode* {
+        AstLabeledStmt * node = nullptr;
+        if (auto*tmp = parseDeclaration(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.declaration = tmp;
+        }
+        else  if (auto*tmp = parseType(t); tmp != nullptr) {
+            node = new AstResult;
+            node->ar.type = tmp;
+        }
         return node;
     };
     // parsing startup

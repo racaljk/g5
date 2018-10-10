@@ -1,3 +1,5 @@
+# go lex
+```ebnf
 identifier = letter { letter | unicode_digit } .
 
 
@@ -30,3 +32,4 @@ escaped_char     = `\` ( "a" | "b" | "f" | "n" | "r" | "t" | "v" | `\` | "'" | `
 string_lit             = raw_string_lit | interpreted_string_lit .
 raw_string_lit         = "`" { unicode_char | newline } "`" .
 interpreted_string_lit = `"` { unicode_value | byte_value } `"` .
+```

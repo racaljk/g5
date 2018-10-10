@@ -1,3 +1,5 @@
+# go syntax
+```ebnf
 SourceFile = PackageClause ";" { ImportDecl ";" } { TopLevelDecl ";" } .
 PackageClause  = "package" PackageName .
 PackageName    = identifier .
@@ -81,3 +83,4 @@ Slice          = "[" [ Expression ] ":" [ Expression ] "]" |
                  "[" [ Expression ] ":" Expression ":" Expression "]" .
 TypeAssertion  = "." "(" Type ")" .
 Arguments      = "(" [ ( ExpressionList | Type [ "," ExpressionList ] ) [ "..." ] [ "," ] ] ")" .
+```
