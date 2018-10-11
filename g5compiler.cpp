@@ -167,13 +167,26 @@ struct AstStatement : public AstNode {
     union {
         AstNode* declaration;
         AstNode* labeledStmt;
+        AstNode* simpleStmt;
+        AstNode* goStmt;
+        AstNode* returnStmt;
+        AstNode* breakStmt;
+        AstNode* continueStmt;
+        AstNode* gotoStmt;
+        AstNode* fallthroughStmt;
+        AstNode* block;
+        AstNode* ifStmt;
+        AstNode* switchStmt;
+        AstNode* selectStmt;
+        AstNode* forStmt;
+        AstNode* deferStmt;
     }as;
 };
-struct AstLabledStatement : public AstNode {
+struct AstLabeledStmt : public AstNode {
     string identifier;
     AstNode* statement;
 };
-struct AstSimpleStatement : public AstNode {
+struct AstSimpleStmt : public AstNode {
     union {
         AstNode* expressionStmt;
         AstNode* sendStmt;
@@ -189,7 +202,7 @@ struct AstReturnStmt : public AstNode {
     AstNode* expressionList;
 };
 struct AstBreakStmt : public AstNode {
-    string labe;
+    string label;
 };
 struct AstContinueStmt : public AstNode {
     string label;
@@ -784,8 +797,13 @@ const AstNode* parse(const string & filename) {
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
         parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType,
-        parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec, parseFunctionDecl, 
-        parseFunctionBody, parseBlock, parseStatementList, parseStatement;
+        parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec, parseFunctionDecl, parseRangeClause,
+        parseFunctionBody, parseBlock, parseStatementList, parseStatement, parseDeclaration,
+        parseLabeledStmt, parseSimpleStmt, parseGoStmt, parseReturnStmt, parseBreakStmt,
+        parseContinueStmt, parseGotoStmt, parseFallthroughStmt, parseBlock, parseIfStmt,
+        parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExpressionStmt,
+        parseSendStmt, parseIncDecStmt, parseAssignment, parseShortVarDecl, parseExprCaseClause,
+        parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause;
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         AstIdentifierList* node = nullptr;
@@ -1358,19 +1376,19 @@ const AstNode* parse(const string & filename) {
         //    node->ass.EmptyStmt = tmp;
        // }
         if(auto* tmp = parseExpressionStmt(t); tmp!=nullptr){
-            node = new AstExpressionStmt;
+            node = new AstSimpleStmt;
             node->ass.expressionStmt = tmp;
         }else if(auto* tmp = parseSendStmt(t); tmp!=nullptr){
-            node = new AstSendStmt;
+            node = new AstSimpleStmt;
             node->ass.sendStmt = tmp;
         }else if(auto* tmp = parseIncDecStmt(t); tmp!=nullptr){
-            node = new AstIncDecStmt;
+            node = new AstSimpleStmt;
             node->ass.incDecStmt = tmp;
         }else if(auto* tmp = parseAssignment(t); tmp!=nullptr){
-            node = new AstAssignment;
+            node = new AstSimpleStmt;
             node->ass.assignment = tmp;
         }else if(auto* tmp = parseShortVarDecl(t); tmp!=nullptr){
-            node = new AstShortVarDecl;
+            node = new AstSimpleStmt;
             node->ass.shortVarDecl = tmp;
         }
         return node;
@@ -1421,7 +1439,7 @@ const AstNode* parse(const string & filename) {
         AstGotoStmt* node = nullptr;
         if(t.type==KW_goto){
             node = new AstGotoStmt;
-            node->label = expect(TK_ID,"goto statement must follow a label");
+            node->label = expect(TK_ID,"goto statement must follow a label").lexeme;
         }
         return node;
     };
@@ -1447,9 +1465,9 @@ const AstNode* parse(const string & filename) {
             t=next(f);
             if(t.type==KW_else){
                 t=next(f);
-                if(auto *tmp1=parseIfStmt(T);tmp1!=nullptr){
-                    node->ais.ifStmt = tmp;
-                }else if(auto *tmp1=parseBlock(T);tmp1!=nullptr){
+                if(auto *tmp1=parseIfStmt(t);tmp1!=nullptr){
+                    node->ais.ifStmt = tmp1;
+                }else if(auto *tmp1=parseBlock(t);tmp1!=nullptr){
                     node->ais.block = tmp1;
                 }else{
                     throw runtime_error("else is empty");
@@ -1462,7 +1480,7 @@ const AstNode* parse(const string & filename) {
         AstSwitchStmt* node = nullptr;
         if (t.type == KW_switch) {
             node = new AstSwitchStmt;
-            if (auto*tmp = parseSimpleStatement(t); tmp != nullptr) {
+            if (auto*tmp = parseSimpleStmt(t); tmp != nullptr) {
                 node->condition = tmp;
                 expect(OP_SEMI, "expect semicolon in switch condition");
                 if (auto*tmp1 = parseExpression(t); tmp1 != nullptr) {
