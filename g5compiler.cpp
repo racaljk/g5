@@ -1975,7 +1975,119 @@ else {
     };
     parseCompositeLit = [&](Token&t)->AstNode* {
         AstCompositeLit* node = nullptr;
-        //todo
+        if (auto*tmp = parseStructType(t); tmp != nullptr) {
+            node = new AstCompositeLit;
+            node->literalType = tmp;
+            t = next(f);
+            node->literalValue = parseLiteralValue(t);
+        }
+        else if (auto*tmp = parseArrayType(t); tmp != nullptr) {
+            node = new AstCompositeLit;
+            node->literalType = tmp;
+            t = next(f);
+            node->literalValue = parseLiteralValue(t);
+        }
+        else if (t.type == OP_LBRACKET) {
+            node = new AstCompositeLit;
+            expect(OP_VARIADIC, "expect variadic");
+            expect(OP_RBRACKET, "expect ]");
+            node->literalType = parseType(t);
+            t = next(f);
+            node->literalValue = parseLiteralValue(t);
+        }
+        else if (auto*tmp = parseSliceType(t); tmp != nullptr) {
+            node = new AstCompositeLit;
+            node->literalType = tmp;
+            t = next(f);
+            node->literalValue = parseLiteralValue(t);
+        }
+        else if(auto*tmp = parseMapType(t); tmp != nullptr) {
+            node = new AstCompositeLit;
+            node->literalType = tmp;
+            t = next(f);
+            node->literalValue = parseLiteralValue(t);
+        }
+        else if (auto*tmp = parseTypeName(t); tmp != nullptr) {
+            node = new AstCompositeLit;
+            node->literalType = tmp;
+            t = next(f);
+            node->literalValue = parseLiteralValue(t);
+        }
+        return node;
+    };
+    parseLiteralValue = [&](Token&t)->AstNode* {
+        AstLiteralValue*node = nullptr;
+        if (t.type == OP_LBRACE) {
+            node = new AstLiteralValue;
+            if (auto*tmp = parseElementList(t); tmp != nullptr) {
+                node->elementList = tmp;
+                t = next(f);
+                if (t.type == OP_COMMA) {
+                    t = next(f);
+                }
+            }
+            if (t.type != OP_RBRACE) {
+                throw runtime_error("brace {} must match");
+            }
+        }
+        return node;
+    };
+    parseElementList = [&](Token&t)->AstNode* {
+        AstElementList*node = nullptr;
+        if (auto*tmp = parseKeyedElement(t); tmp != nullptr) {
+            node = new AstElementList;
+            node->keyedElement.push_back(tmp);
+            t = next(f);
+            while (t.type == OP_COMMA) {
+                t = next(f);
+                node->keyedElement.push_back(parseKeyedElement);
+                t = next(f);
+            }
+        }
+        return node;
+    };
+    parseKeyedElement = [&](Token&t)->AstNode* {
+        AstKeyedElement*node = nullptr;
+        if (auto*tmp = parseKey(t); tmp != nullptr) {
+            node = new AstKeyedElement;
+            node->key = tmp;
+            expect(OP_COLON, "expect :");
+            t = next(f);
+        }
+        if (auto*tmp = parseElement(t);tmp!=nullptr) {
+            if (node == nullptr) {
+                node = new AstKeyedElement;
+            }
+            node->element = tmp;
+        }
+        return node;
+    };
+    parseKey = [&](Token&t)->AstNode* {
+        AstKey*node = nullptr;
+        if (t.type == TK_ID) {
+            node = new AstKey;
+            node->ak.key = t.lexeme;
+        }
+        else if (auto*tmp = parseExpression(t); tmp != nullptr) {
+            node = new AstKey;
+            node->ak.expression = tmp;
+        }
+        else if (auto*tmp = parseLiteralValue(t); tmp != nullptr) {
+            node = new AstKey;
+            node->ak.literalValue = tmp;
+        }
+        return node;
+    };
+    parseElement = [&](Token&t)->AstNode* {
+        AstElement*node = nullptr;
+        if (auto*tmp = parseExpression(t); tmp != nullptr) {
+            node = new AstElement;
+            node->ae.expression = tmp;
+        }
+        else if (auto*tmp = parseLiteralValue(t); tmp != nullptr) {
+            node = new AstElement;
+            node->ae.literalValue = tmp;
+        }
         return node;
     };
     parseFunctionLit = [&](Token&t)->AstNode* {
