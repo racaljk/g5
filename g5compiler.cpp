@@ -44,6 +44,7 @@ enum TokenType : signed int {
 };
 struct AstNode { virtual ~AstNode() {} };
 struct AstIdentifierList :public AstNode { vector<string> identifierList; };
+struct AstExpressionList :public AstNode { vector<AstNode*> expressionList; };
 struct AstSourceFile :public AstNode {
     AstNode* packageClause;
     vector<AstNode*> importDecl;
@@ -824,7 +825,22 @@ const AstNode* parse(const string & filename) {
                     t = next(f);
                 }
         }
-
+        return node;
+    };
+    parseExpressionList = [&](Token&t)->AstNode* {
+        AstExpressionList* node = nullptr;
+        if (auto* tmp = parseExpression(t); tmp != nullptr) {
+            node = new  AstExpressionList;
+            node->expressionList.emplace_back(tmp);
+            t = next(f);
+            if (t.type == OP_COMMA) {
+                while (t.type == OP_COMMA) {
+                    t = next(f);
+                    node->expressionList.emplace_back(parseExpression(t));
+                    t = next(f);
+                }
+            }
+        }
         return node;
     };
     parseSourceFile = [&](Token&t)->AstNode* {
@@ -1632,7 +1648,6 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-
     parseDeferStmt = [&](Token&t)->AstNode* {
         AstDeferStmt* node = nullptr;
         if(t.type==KW_defer){
