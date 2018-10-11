@@ -103,7 +103,7 @@ struct AstStructType :public AstNode {
         AstNode* typeName;
     };
 
-    map<_FieldDecl, string> fields;
+    vector<tuple<_FieldDecl, string>> fields;
 };
 struct AstPointerType : public AstNode { AstNode * baseType; };
 struct AstFunctionType :public AstNode { AstNode * signature; };
@@ -370,9 +370,9 @@ struct AstArgument :public AstNode {
         struct {
             AstNode*type;
             AstNode*expressionList;
-        }named;
-        bool isVariadic;
+        }named;    
     }aa;
+    bool isVariadic;
 };
 struct AstOperand :public AstNode {
     union {
@@ -410,10 +410,13 @@ struct AstKeyedElement : public AstNode {
 };
 struct AstKey : public AstNode {
     union {
-        AstNode* key;
+        AstNode* fieldName;
         AstNode* expression;
         AstNode* literalValue;
     }ak;
+};
+struct AstFieldName : public AstNode {
+    string fieldName;
 };
 struct AstElement : public AstNode {
     union {
@@ -934,7 +937,7 @@ const AstNode* parse(const string & filename) {
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
         parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType,
         parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec, parseFunctionDecl,
-        parseFunctionBody, parseBlock, parseStatementList, parseStatement, parseDeclaration,
+        parseFunctionBody, parseStatementList, parseStatement, parseCompositeLit,
         parseLabeledStmt, parseSimpleStmt, parseGoStmt, parseReturnStmt, parseBreakStmt,
         parseContinueStmt, parseGotoStmt, parseFallthroughStmt, parseBlock, parseIfStmt,
         parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExpressionStmt,
@@ -942,9 +945,9 @@ const AstNode* parse(const string & filename) {
         parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
         parseRangeClause, parseSourceFile, parseMethodDecl, parseExpressionList, parseExpression,
         parseUnaryExpr, parsePrimaryExpr, parseSelector, parseIndex, parseSlice, parseTypeAssertion,
-        parseArgument, parseOperand, parseOperandName, parseLiteral, parseBasicLit, parseCompositeLit,
+        parseArgument, parseOperand, parseOperandName, parseLiteral, parseBasicLit, 
         parseLiteralValue, parseElementList, parseKeyedElement, parseKey, parseElement, 
-        parseFunctionLit, parseConversion, parseMethodExpr;
+        parseFunctionLit, parseConversion, parseMethodExpr, parseFieldName;
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         AstIdentifierList* node = nullptr;
@@ -1192,7 +1195,7 @@ const AstNode* parse(const string & filename) {
                 if (t.type == LITERAL_STR) {
                     tag = t.lexeme;
                 }
-                node->fields[fd] = tag;
+                node->fields.push_back(make_tuple(fd,tag));
             } while (t.type != OP_RBRACE);
         }
         return node;
@@ -1696,7 +1699,7 @@ const AstNode* parse(const string & filename) {
     parseCommClause = [&](Token&t)->AstNode* {
         AstCommClause* node = nullptr;
         if (auto*tmp = parseCommCase(t); tmp != nullptr) {
-            node = new AstCommCase;
+            node = new AstCommClause;
             node->commCase = tmp;
             expect(OP_COLON, "expect colon in select case clause");
             node->statementList = parseStatementList(t);
@@ -2146,7 +2149,7 @@ else {
             t = next(f);
             while (t.type == OP_COMMA) {
                 t = next(f);
-                node->keyedElement.push_back(parseKeyedElement);
+                node->keyedElement.push_back(parseKeyedElement(t));
                 t = next(f);
             }
         }
@@ -2170,9 +2173,9 @@ else {
     };
     parseKey = [&](Token&t)->AstNode* {
         AstKey*node = nullptr;
-        if (t.type == TK_ID) {
+        if (auto*tmp = parseFieldName(t); tmp != nullptr) {
             node = new AstKey;
-            node->ak.key = t.lexeme;
+            node->ak.fieldName = tmp;
         }
         else if (auto*tmp = parseExpression(t); tmp != nullptr) {
             node = new AstKey;
@@ -2181,6 +2184,14 @@ else {
         else if (auto*tmp = parseLiteralValue(t); tmp != nullptr) {
             node = new AstKey;
             node->ak.literalValue = tmp;
+        }
+        return node;
+    };
+    parseFieldName = [&](Token&t)->AstNode* {
+        AstFieldName* node = nullptr;
+        if (t.type == TK_ID) {
+            node = new AstFieldName;
+            node->fieldName = t.lexeme;
         }
         return node;
     };
@@ -2232,7 +2243,7 @@ else {
             node->receiverType = tmp;
             expect(OP_DOT, "expect dot in method expression");
             t = next(f);
-            node->methodName = expect(TK_ID, "expect method name");
+            node->methodName = expect(TK_ID, "expect method name").lexeme;
         }
         return node;
     };
@@ -2257,7 +2268,7 @@ void printLex(const string & filename) {
 
 int main() {
     const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\consts.go";
-    //printLex(filename);
+    printLex(filename);
     parse(filename);
     getchar();
     return 0;
