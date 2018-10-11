@@ -1916,14 +1916,36 @@ else {
     };
     parseOperand = [&](Token&t)->AstNode* {
         AstOperand*node = nullptr;
+        if (t.type == LITERAL_INT || t.type == LITERAL_FLOAT || t.type == LITERAL_IMG ||
+            t.type == LITERAL_RUNE || t.type == LITERAL_STR) {
+            node->ao.basicLit = t.lexeme;
+        }
         return node;
     };
     parseConversion = [&](Token&t)->AstNode* {
         AstConversion*node = nullptr;
+        if (auto*tmp = parseType(t); tmp != nullptr) {
+            node = new AstConversion;
+            expect(OP_LPAREN, "expectn (");
+            t = next(f);
+            if (t.type == OP_COMMA) {
+                t = next(f);
+            }
+            if (t.type != OP_RPAREN) {
+                throw runtime_error("expect )");
+            }
+        }
         return node;
     };
     parseMethodExpr = [&](Token&t)->AstNode* {
-        AstOMethodExpr*node = nullptr;
+        AstMethodExpr*node = nullptr;
+        if (auto*tmp = parseType(t); tmp != nullptr) {
+            node = new AstMethodExpr;
+            node->receiverType = tmp;
+            expect(OP_DOT, "expect dot in method expression");
+            t = next(f);
+            node->methodName = expect(TK_ID, "expect method name");
+        }
         return node;
     };
     // parsing startup
