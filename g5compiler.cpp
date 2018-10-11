@@ -304,6 +304,33 @@ struct AstMethodDecl :public AstNode {
     AstNode* signature;
     AstNode* functionBody;
 };
+struct AstPrimaryExpr :public AstNode {
+    union {
+        AstNode* operand;
+        AstNode* conversion;
+        AstNode* methodExpr;
+        struct {
+            AstNode* primaryExpr;
+            AstNode* selector;
+        }selector;
+        struct {
+            AstNode* primaryExpr;
+            AstNode* index;
+        }index;
+        struct {
+            AstNode* primaryExpr;
+            AstNode* slice;
+        }slice;
+        struct {
+            AstNode* primaryExpr;
+            AstNode* typeAssertion;
+        }typeAssertion;
+        struct {
+            AstNode* primaryExpr;
+            AstNode* argument;
+        }argument;
+    }ape;
+};
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
@@ -811,7 +838,7 @@ const AstNode* parse(const string & filename) {
         parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExpressionStmt,
         parseSendStmt, parseIncDecStmt, parseAssignment, parseShortVarDecl, parseExprCaseClause,
         parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
-        parseRangeClause, parseSourceFile, parseMethodDecl;
+        parseRangeClause, parseSourceFile, parseMethodDecl, parseExpressionList;
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         AstIdentifierList* node = nullptr;
@@ -1683,43 +1710,45 @@ const AstNode* parse(const string & filename) {
         AstIncDecStmt* node = nullptr;
         if(auto*tmp = parseExpression(t);tmp!=nullptr){
             node = new AstIncDecStmt;
-            node->expression = tmp;
-            t=next(f);
-            if(t.type==OP_INC){
-                node->isInc = true;
-            }else if(t.type==OP_DEC){
-                node->isInc = false;
-            }else{
-                throw runtime_error("expect ++/--");
-            }
+node->expression = tmp;
+t = next(f);
+if (t.type == OP_INC) {
+    node->isInc = true;
+}
+else if (t.type == OP_DEC) {
+    node->isInc = false;
+}
+else {
+    throw runtime_error("expect ++/--");
+}
         }
         return node;
     };
     parseAssignment = [&](Token&t)->AstNode* {
         AstAssignment* node = nullptr;
-        if(auto*tmp = parseExpressionList(t);tmp!=nullptr){
+        if (auto*tmp = parseExpressionList(t); tmp != nullptr) {
             node = new AstAssignment;
             node->lhs = tmp;
-            t=next(f);
-            if(t.type==OP_ADD || t.type==OP_SUB ||
-                t.type==OP_BITOR||t.type==OP_XOR ||
-                t.type==OP_MUL||t.type==OP_DIV||
-                t.type==OP_MOD||t.type==OP_LSHIFT||
-                t.type==OP_RSHIFT||t.type==OP_BITAND||
-                t.type==OP_ANDXOR){
+            t = next(f);
+            if (t.type == OP_ADD || t.type == OP_SUB ||
+                t.type == OP_BITOR || t.type == OP_XOR ||
+                t.type == OP_MUL || t.type == OP_DIV ||
+                t.type == OP_MOD || t.type == OP_LSHIFT ||
+                t.type == OP_RSHIFT || t.type == OP_BITAND ||
+                t.type == OP_ANDXOR) {
                 node->assignOp = t.type;
             }
-            expect(OP_EQ,"expect =");
+            expect(OP_EQ, "expect =");
             node->rhs = parseExpressionList(t);
         }
         return node;
     };
     parseShortVarDecl = [&](Token&t)->AstNode* {
         AstShortVarDecl* node = nullptr;
-        if(auto*tmp = parseIdentifierList(t);tmp!=nullptr){
+        if (auto*tmp = parseIdentifierList(t); tmp != nullptr) {
             node = new AstShortVarDecl;
             node->lhs = tmp;
-            expect(OP_SHORTAGN,"expect := in short assign statement");
+            expect(OP_SHORTAGN, "expect := in short assign statement");
             node->rhs = parseExpressionList(t);
         }
         return node;
@@ -1735,6 +1764,157 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
+    parseExpression = [&](Token&t)->AstNode* {
+        AstExpression* node = nullptr;
+        if (auto*tmp = parseUnaryExpr(t); tmp != nullptr) {
+            node = new  AstExpression;
+            node->ae.unaryExpr = tmp;
+        }
+        else if (auto*tmp = parseExpression(t); tmp != nullptr) {
+            node = new  AstExpression;
+            node->ae.named.lhs = tmp;
+            t = next(f);
+            if (t.type == OP_OR || t.type == OP_AND ||
+                t.type == OP_EQ || t.type == OP_NE || t.type == OP_LT || t.type == OP_LE || t.type == OP_GT ||
+                t.type == OP_GE || t.type == OP_ADD || t.type == OP_SUB || t.type == OP_BITOR || t.type == OP_XOR ||
+                t.type == OP_MUL || t.type == OP_DIV || t.type == OP_MOD || t.type == OP_LSHIFT ||
+                t.type == OP_RSHIFT || t.type == OP_BITAND || t.type == OP_BITANDXOR) {
+                node->ae.named.binaryOp = t.type;
+            }
+            t = next(f);
+            node->ae.named.rhs = parseExpression(t);
+        }
+        return node;
+    };
+    parseUnaryExpr = [&](Token&t)->AstNode* {
+        AstUnaryExpr* node = nullptr;
+        if (auto*tmp = parsePrimaryExpr(t); tmp != nullptr) {
+            node = new AstUnaryExpr;
+            node->aue.primaryExpr = tmp;
+        }
+        else if (t.type == OP_ADD || t.type == OP_SUB || t.type == OP_NOT || t.type == OP_XOR
+            || t.type == OP_MUL || t.type == OP_BITAND || t.type == OP_CHAN) {
+            node = new AstUnaryExpr;
+            node->aue.named.unaryOp = t.type;
+            t = next(f);
+            node->aue.named.unaryExpr = parseUnaryExpr(t);
+        }
+        return node;
+    };
+
+    parsePrimaryExpr = [&](Token&t)->AstNode* {
+        AstPrimaryExpr*node = nullptr;
+        if (auto*tmp = parseOperand(t); tmp != nullptr) {
+            node = new AstPrimaryExpr;
+            node->ape.operand = tmp;
+        }
+        else if (auto*tmp = parseConversion(t); tmp != nullptr) {
+            node = new AstPrimaryExpr;
+            node->ape.conversion = tmp;
+        }
+        else if (auto*tmp = parseMethodExpr(t); tmp != nullptr){
+            node = new AstPrimaryExpr;
+            node->ape.methodExpr = tmp;
+        }
+        else if (auto*tmp = parseExpression(t); tmp != nullptr) {
+            node = new AstPrimaryExpr;
+            if (auto*tmp1 = parseSelector(t); tmp1 != nullptr) {
+                node->ape.selector.primaryExpr = tmp;
+                node->ape.selector.selector = tmp1;
+            }else if(auto*tmp1 = parseIndex(t); tmp1 != nullptr) {
+                node->ape.index.primaryExpr = tmp;
+                node->ape.index.index = tmp1;
+            }
+            else if (auto*tmp1 = parseSlice(t); tmp1 != nullptr) {
+                node->ape.slice.primaryExpr = tmp;
+                node->ape.slice.slice = tmp1;
+            }
+            else if (auto*tmp1 = parseTypeAssertion(t); tmp1 != nullptr) {
+                node->ape.typeAssertion.primaryExpr = tmp;
+                node->ape.typeAssertion.typeAssertion = tmp1;
+            }
+            else if (auto*tmp1 = parseArgument(t); tmp1 != nullptr) {
+                node->ape.argument.primaryExpr = tmp;
+                node->ape.argument.argument = tmp1;
+            }
+        }
+        return node;
+    };
+    parseSelector = [&](Token&t)->AstNode* {
+        AstSelector*node = nulllptr;
+        if (t.type == OP_DOT) {
+            node = new AstSelector;
+            node->identifier = expect(TK_ID, "expect an identifier in selector").lexeme;
+        }
+        return node;
+    };
+    parseIndex = [&](Token&t)->AstNode* {
+        AstIndex*node = nulllptr;
+        if (t.type == OP_LBRACKET) {
+            node = new AstIndex;
+            node->expression = parseExpression(t);
+            expect(OP_RBRACKET, "bracket [] must match");
+        }
+        return node;
+    };
+    parseSlice = [&](Token&t)->AstNode* {
+        AstSlice*node = nulllptr;
+        if (t.type == OP_LBRACKET) {
+            node = new AstSlice;
+            node->start = parseExpression(t);
+            expect(OP_COLON, "expect colon");
+            node->stop = parseExpression(t);
+            t = next(f);
+            if (t.type == OP_RBRACKET) {
+                t = next(f);
+            }
+            else if (t.type == OP_COLON) {
+                t = next(f);
+                node->step = parseExpression(t);
+                expect(OP_RBRACKET, "bracket [] must match");
+            }
+        }
+        return node;
+    };
+    parseTypeAssertion = [&](Token&t)->AstNode* {
+        AstTypeAssertion*node = nulllptr;
+        if (t.type == OP_DOT) {
+            node = new AstTypeAssertion;
+            expect(OP_LPAREN, "expect (");
+            node->type = parseType(t);
+            expect(OP_RPAREN, "expect )");
+        }
+        return node;
+    };
+    parseArgument = [&](Token&t)->AstNode* {
+        AstArgument*node = nullptr;
+        if (t.type == OP_LPAREN) {
+            node = new AstArgument;
+            if (auto*tmp = parseExpressionList(t); tmp != nullptr) {
+                node->aa.expressionList = tmp;
+            }
+            else if (auto*tmp = parseType(t); tmp != nullptr) {
+                node->aa.named.type = tmp;
+                t = next(f);
+                if (t.type == OP_COMMA) {
+                    node->aa.named.expressionList = parseExpressionList(t);
+                }
+            }
+            t = next(f);
+            if (t.type == OP_VARIADIC) {
+                node->isVariadic = true;
+                t = next(f);
+            }
+            if (t.type == OP_COMMA) {
+                t = next(f);
+            }
+            if (t.type != OP_RPAREN) {
+                throw runtime_error("expect )");
+            }
+        }
+        return node;
+    };
+
     // parsing startup
     
     return parseSourceFile(t);
