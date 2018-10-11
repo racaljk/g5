@@ -1916,9 +1916,76 @@ else {
     };
     parseOperand = [&](Token&t)->AstNode* {
         AstOperand*node = nullptr;
+        if (auto * tmp = parseLiteral(t); tmp != nullptr) {
+            node = new AstOperand;
+            node->ao.literal = tmp;
+        }
+        else if (auto *tmp = parseOperandName(t); tmp != nullptr) {
+            node = new AstOperand;
+            node->ao.operandName = tmp;
+        }
+        else if (t.type==OP_LPAREN) {
+            node = new AstOperand;
+            node->ao.expression = parseExpression(t);
+            expect(OP_RPAREN, "expect )");
+        }
+        return node;
+    };
+    parseOperandName = [&](Token&t)->AstNode* {
+        AstOperandName*node = nullptr;
+        if (t.type == TK_ID) {
+            node = new AstOperandName;
+            string operandName = t.lexeme;
+            if (operandName == package) {
+                expect(OP_DOT, "expect dot");
+                t = next(f);
+                operandName += t.lexeme;
+                node->operandName = operandName;
+            }
+            else {
+                node->operandName = operandName;
+            }
+        }
+        return node;
+    };
+    parseLiteral = [&](Token&t)->AstNode* {
+        AstLiteral*node = nullptr;
+        if (auto*tmp = parseBasicLit(t); tmp != nullptr) {
+            node = new AstLiteral;
+            node->al.basicLit = tmp;
+        }
+        else if (auto*tmp = parseCompositeLit(t); tmp != nullptr) {
+            node = new AstLiteral;
+            node->al.compositeLit = tmp;
+        }
+        else if (auto*tmp = parseFunctionLit(t); tmp != nullptr) {
+            node = new AstLiteral;
+            node->al.functionLit = tmp;
+        }
+        return node;
+    };
+    parseBasicLit = [&](Token&t)->AstNode* {
+        AstBasicLit* node = nullptr;
         if (t.type == LITERAL_INT || t.type == LITERAL_FLOAT || t.type == LITERAL_IMG ||
             t.type == LITERAL_RUNE || t.type == LITERAL_STR) {
-            node->ao.basicLit = t.lexeme;
+            node = new AstBasicLit;
+            node->lit = t.type;
+        }
+        return node;
+    };
+    parseCompositeLit = [&](Token&t)->AstNode* {
+        AstCompositeLit* node = nullptr;
+        //todo
+        return node;
+    };
+    parseFunctionLit = [&](Token&t)->AstNode* {
+        AstFunctionLit* node = nullptr;
+        if (t.type == KW_func) {
+            node = new AstFunctionLit;
+            t = next(f);
+            node->signature = parseSignature(t);
+            t = next(f);
+            node->functionBody = parseFunctionBody(t);
         }
         return node;
     };
