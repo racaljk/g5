@@ -297,6 +297,12 @@ struct AstShortVarDecl : public AstNode {
     AstNode* lhs;
     AstNode* rhs;
 };
+struct AstMethodDecl :public AstNode {
+    AstNode* receiver;
+    string methodName;
+    AstNode* signature;
+    AstNode* functionBody;
+};
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
@@ -784,6 +790,7 @@ skip_comment_and_find_next:
 
 const AstNode* parse(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
+    auto t = next(f);
 
     auto expect = [&f](TokenType tk, const string& msg) {
         auto t = next(f);
@@ -791,19 +798,19 @@ const AstNode* parse(const string & filename) {
         return t;
     };
 
-    function<AstNode*()> parseSourceFile;
     function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
         parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType,
-        parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec, parseFunctionDecl, parseRangeClause,
+        parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec, parseFunctionDecl,
         parseFunctionBody, parseBlock, parseStatementList, parseStatement, parseDeclaration,
         parseLabeledStmt, parseSimpleStmt, parseGoStmt, parseReturnStmt, parseBreakStmt,
         parseContinueStmt, parseGotoStmt, parseFallthroughStmt, parseBlock, parseIfStmt,
         parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExpressionStmt,
         parseSendStmt, parseIncDecStmt, parseAssignment, parseShortVarDecl, parseExprCaseClause,
-        parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause;
+        parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
+        parseRangeClause, parseSourceFile, parseMethodDecl;
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         AstIdentifierList* node = nullptr;
@@ -820,9 +827,9 @@ const AstNode* parse(const string & filename) {
 
         return node;
     };
-    parseSourceFile = [&]()->AstNode* {
+    parseSourceFile = [&](Token&t)->AstNode* {
         auto node = new AstSourceFile;
-        auto t = next(f);
+        
 
         node->packageClause = parsePackageClause(t);
 
@@ -1702,9 +1709,20 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-
+    parseMethodDecl = [&](Token&t)->AstNode* {
+        AstMethodDecl* node = nullptr;
+        if (t.type == KW_func) {
+            node = new AstMethodDecl;
+            node->receiver = parseParameter(t);
+            node->methodName = expect(TK_ID, "a method declaration must contain a name").lexeme;
+            node->signature = parseSignature(t);
+            node->functionBody = parseFunctionBody(t);
+        }
+        return node;
+    };
     // parsing startup
-    return parseSourceFile();
+    
+    return parseSourceFile(t);
 }
 
 void emitStub() {}
