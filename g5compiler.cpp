@@ -304,6 +304,25 @@ struct AstMethodDecl :public AstNode {
     AstNode* signature;
     AstNode* functionBody;
 };
+struct AstExpression : public AstNode {
+    union {
+        struct {
+            AstNode* lhs;
+            TokenType binaryOp;
+            AstNode* rhs;
+        }named;
+        AstNode* unaryExpr;
+    }ae;
+};
+struct AstUnaryExpr :public AstNode {
+    union {
+        AstNode*primaryExpr;
+        struct {
+            AstNode* unaryExpr;
+            TokenType unaryOp;
+        }named;
+    }aue;
+};
 struct AstPrimaryExpr :public AstNode {
     union {
         AstNode* operand;
@@ -330,6 +349,89 @@ struct AstPrimaryExpr :public AstNode {
             AstNode* argument;
         }argument;
     }ape;
+};
+struct AstSelector :public AstNode {
+    string identifier;
+};
+struct AstIndex :public AstNode {
+    AstNode* expression;
+};
+struct AstSlice :public AstNode {
+    AstNode*start;
+    AstNode*stop;
+    AstNode*step;
+};
+struct AstTypeAssertion :public AstNode {
+    AstNode*type;
+};
+struct AstArgument :public AstNode {
+    union {
+        AstNode*expressionList;
+        struct {
+            AstNode*type;
+            AstNode*expressionList;
+        }named;
+        bool isVariadic;
+    }aa;
+};
+struct AstOperand :public AstNode {
+    union {
+        AstNode*literal;
+        AstNode*operandName;
+        AstNode*expression;
+    }ao;
+};
+struct AstOperandName : public AstNode {
+    string operandName;
+};
+struct AstLiteral :public AstNode {
+    union {
+        AstNode*basicLit;
+        AstNode*compositeLit;
+        AstNode*functionLit;
+    }al;
+};
+struct AstBasicLit : public AstNode {
+    TokenType lit;
+};
+struct AstCompositeLit : public AstNode {
+    AstNode*literalType;
+    AstNode*literalValue;
+};
+struct AstLiteralValue : public AstNode {
+    AstNode*elementList;
+};
+struct AstElementList : public AstNode {
+    vector< AstNode*> keyedElement;
+};
+struct AstKeyedElement : public AstNode {
+    AstNode*key;
+    AstNode*element;
+};
+struct AstKey : public AstNode {
+    union {
+        AstNode* key;
+        AstNode* expression;
+        AstNode* literalValue;
+    }ak;
+};
+struct AstElement : public AstNode {
+    union {
+        AstNode*expression;
+        AstNode*literalValue;
+    }ae;
+};
+struct AstFunctionLit : public AstNode {
+    AstNode*signature;
+    AstNode*functionBody;
+};
+struct AstConversion : public AstNode {
+    AstNode*type;
+    AstNode*expression;
+};
+struct AstMethodExpr : public AstNode {
+    AstNode*receiverType;
+    string methodName;
 };
 //===----------------------------------------------------------------------===//
 // global data
@@ -838,7 +940,11 @@ const AstNode* parse(const string & filename) {
         parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExpressionStmt,
         parseSendStmt, parseIncDecStmt, parseAssignment, parseShortVarDecl, parseExprCaseClause,
         parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
-        parseRangeClause, parseSourceFile, parseMethodDecl, parseExpressionList;
+        parseRangeClause, parseSourceFile, parseMethodDecl, parseExpressionList, parseExpression,
+        parseUnaryExpr, parsePrimaryExpr, parseSelector, parseIndex, parseSlice, parseTypeAssertion,
+        parseArgument, parseOperand, parseOperandName, parseLiteral, parseBasicLit, parseCompositeLit,
+        parseLiteralValue, parseElementList, parseKeyedElement, parseKey, parseElement, 
+        parseFunctionLit, parseConversion, parseMethodExpr;
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         AstIdentifierList* node = nullptr;
@@ -1778,7 +1884,7 @@ else {
                 t.type == OP_EQ || t.type == OP_NE || t.type == OP_LT || t.type == OP_LE || t.type == OP_GT ||
                 t.type == OP_GE || t.type == OP_ADD || t.type == OP_SUB || t.type == OP_BITOR || t.type == OP_XOR ||
                 t.type == OP_MUL || t.type == OP_DIV || t.type == OP_MOD || t.type == OP_LSHIFT ||
-                t.type == OP_RSHIFT || t.type == OP_BITAND || t.type == OP_BITANDXOR) {
+                t.type == OP_RSHIFT || t.type == OP_BITAND || t.type == OP_XOR) {
                 node->ae.named.binaryOp = t.type;
             }
             t = next(f);
@@ -1841,7 +1947,7 @@ else {
         return node;
     };
     parseSelector = [&](Token&t)->AstNode* {
-        AstSelector*node = nulllptr;
+        AstSelector*node = nullptr;
         if (t.type == OP_DOT) {
             node = new AstSelector;
             node->identifier = expect(TK_ID, "expect an identifier in selector").lexeme;
@@ -1849,7 +1955,7 @@ else {
         return node;
     };
     parseIndex = [&](Token&t)->AstNode* {
-        AstIndex*node = nulllptr;
+        AstIndex*node = nullptr;
         if (t.type == OP_LBRACKET) {
             node = new AstIndex;
             node->expression = parseExpression(t);
@@ -1858,7 +1964,7 @@ else {
         return node;
     };
     parseSlice = [&](Token&t)->AstNode* {
-        AstSlice*node = nulllptr;
+        AstSlice*node = nullptr;
         if (t.type == OP_LBRACKET) {
             node = new AstSlice;
             node->start = parseExpression(t);
@@ -1877,7 +1983,7 @@ else {
         return node;
     };
     parseTypeAssertion = [&](Token&t)->AstNode* {
-        AstTypeAssertion*node = nulllptr;
+        AstTypeAssertion*node = nullptr;
         if (t.type == OP_DOT) {
             node = new AstTypeAssertion;
             expect(OP_LPAREN, "expect (");
@@ -1936,7 +2042,7 @@ else {
         if (t.type == TK_ID) {
             node = new AstOperandName;
             string operandName = t.lexeme;
-            if (operandName == package) {
+            if (operandName == grt.package) {
                 expect(OP_DOT, "expect dot");
                 t = next(f);
                 operandName += t.lexeme;
@@ -2105,7 +2211,10 @@ else {
         AstConversion*node = nullptr;
         if (auto*tmp = parseType(t); tmp != nullptr) {
             node = new AstConversion;
+            node->type = tmp;
             expect(OP_LPAREN, "expectn (");
+            t = next(f);
+            node->expression = parseExpression(t);
             t = next(f);
             if (t.type == OP_COMMA) {
                 t = next(f);
