@@ -1914,7 +1914,18 @@ else {
         }
         return node;
     };
-
+    parseOperand = [&](Token&t)->AstNode* {
+        AstOperand*node = nullptr;
+        return node;
+    };
+    parseConversion = [&](Token&t)->AstNode* {
+        AstConversion*node = nullptr;
+        return node;
+    };
+    parseMethodExpr = [&](Token&t)->AstNode* {
+        AstOMethodExpr*node = nullptr;
+        return node;
+    };
     // parsing startup
     
     return parseSourceFile(t);
