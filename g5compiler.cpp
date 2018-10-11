@@ -220,7 +220,70 @@ struct AstExprSwitchCase : public AstNode {
     AstNode * expressionList;
     bool isDefault;
 };
-
+struct AstSelectStmt : public AstNode {
+    vector<AstNode*> commClause;
+};
+struct AstCommClause :public AstNode {
+    AstNode* commCase;
+    AstNode* statementList;
+};
+struct AstCommCase :public AstNode {
+    union {
+        AstNode* sendStmt;
+        AstNode* recvStmt;
+    }acc;
+    bool isDefault;
+};
+struct AstRecvStmt :public AstNode {
+    union {
+        AstNode* identifierList;
+        AstNode* expressionList;
+    }ars;
+    AstNode* recvExpr;
+};
+struct AstForStmt :public AstNode {
+    union {
+        AstNode* condition;
+        AstNode* forClause;
+        AstNode* rangeClause;
+    }afs;
+    AstNode* block;
+};
+struct AstForClause :public AstNode {
+    AstNode* initStmt;
+    AstNode* condition;
+    AstNode* postStmt;
+};
+struct AstRangeClause :public AstNode {
+    union {
+        AstNode* expressionList;
+        AstNode* identifierList;
+    }arc;
+    AstNode* expression;
+};
+struct AstDeferStmt :public AstNode {
+    AstNode* expression;
+};
+struct AstExpressionStmt :public AstNode {
+    AstNode* expression;
+};
+struct AstSendStmt : public AstNode {
+    AstNode* receiver;
+    AstNode* sender;
+};
+struct AstIncDecStmt : public AstNode {
+    AstNode* expression;
+    bool isInc;
+};
+struct AstAssignment :public AstNode {
+    AstNode* lhs;
+    AstNode* rhs;
+    TokenType assignOp;
+};
+struct AstShortVarDecl : public AstNode {
+    AstNode* lhs;
+    AstNode* rhs;
+};
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
@@ -1522,7 +1585,7 @@ const AstNode* parse(const string & filename) {
         expect(OP_SEMI, "expect semicolon in for clause");
         node->condition = parseExpression(t);
         expect(OP_SEMI, "expect semicolon in for clause");
-        node->psotStmt = parseSimpleStmt(t);
+        node->postStmt = parseSimpleStmt(t);
         return node;
     };
     parseRangeClause = [&](Token&t)->AstNode* {
