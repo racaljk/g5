@@ -368,7 +368,7 @@ struct AstLiteral ASTNODE {
         AstNode*functionLit;
     }al;
 };
-struct AstBasicLit ASTNODE { TokenType lit;};
+struct AstBasicLit ASTNODE { TokenType type; string value; };
 struct AstCompositeLit ASTNODE {
     AstNode*literalType;
     AstNode*literalValue;
@@ -896,8 +896,13 @@ const AstNode* parse(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
     auto t = next(f);
 
-    auto expect = [&f](TokenType tk, const string& msg) {
-        auto t = next(f);
+    auto eat = [&f, &t](TokenType tk, const string&msg) {
+        if (t.type != tk) throw runtime_error(msg);
+        t = next(f);
+    };
+
+    auto expect = [&f,&t](TokenType tk, const string& msg) {
+        t = next(f);
         if (t.type != tk) throw runtime_error(msg);
         return t;
     };
@@ -939,12 +944,10 @@ const AstNode* parse(const string & filename) {
         if (auto* tmp = parseExpression(t); tmp != nullptr) {
             node = new  AstExpressionList;
             node->expressionList.emplace_back(tmp);
-            t = next(f);
             if (t.type == OP_COMMA) {
                 while (t.type == OP_COMMA) {
                     t = next(f);
                     node->expressionList.emplace_back(parseExpression(t));
-                    t = next(f);
                 }
             }
         }
@@ -1047,19 +1050,50 @@ const AstNode* parse(const string & filename) {
             node = new AstConstDecl;
             t = next(f);
             if (t.type == OP_LPAREN) {
+                t = next(f);
                 do {
                     node->identifierList.push_back(parseIdentifierList(t));
-                    node->type.push_back(parseType(t));
-                    node->expressionList.push_back(parseExpressionList(t));
-                    expect(OP_SEMI, "expect an explicit semicolon");
+                    if (auto*tmp = parseType(t);tmp!=nullptr) {
+                        node->type.push_back(tmp);
+                        t = next(f);
+                    }
+                    else {
+                        node->type.push_back(nullptr);
+                    }
+                    if (t.type == OP_AGN) {
+                        t = next(f);
+                        node->expressionList.push_back(parseExpressionList(t));
+                    }
+                    else {
+                        node->expressionList.push_back(nullptr);
+                    }
+                    eat(OP_SEMI, "expect an explicit semicolon");
                 } while (t.type != OP_RPAREN);
+                eat(OP_RPAREN, "eat right parenthesis");
             }
             else {
                 node->identifierList.push_back(parseIdentifierList(t));
-                node->type.push_back(parseType(t));
-                node->expressionList.push_back(parseExpressionList(t));
+                if (auto*tmp = parseType(t); tmp != nullptr) {
+                    node->type.push_back(tmp);
+                    t = next(f);
+                }
+                else {
+                    node->type.push_back(nullptr);
+                }
+                if (t.type == OP_AGN) {
+                    t = next(f);
+                    node->expressionList.push_back(parseExpressionList(t));
+                }
+                else {
+                    node->expressionList.push_back(nullptr);
+                }
+                if (t.type != OP_SEMI) {
+
+                    throw runtime_error("expect an explicit semicolon");
+                }
             }
         }
+        eat(OP_SEMI, "expect ;");
         return node;
     };
     parseType = [&](Token&t)->AstNode* {
@@ -1854,38 +1888,33 @@ const AstNode* parse(const string & filename) {
         AstExpression* node = nullptr;
         if (auto*tmp = parseUnaryExpr(t); tmp != nullptr) {
             node = new  AstExpression;
-            node->ae.unaryExpr = tmp;
-        }
-        else if (auto*tmp = parseExpression(t); tmp != nullptr) {
-            node = new  AstExpression;
-            node->ae.named.lhs = tmp;
-            t = next(f);
-            if (t.type == OP_OR || t.type == OP_AND || t.type == OP_EQ || 
-                t.type == OP_NE || t.type == OP_LT || t.type == OP_LE || 
+            node->ae.unaryExpr = tmp; 
+            if (t.type == OP_OR || t.type == OP_AND || t.type == OP_EQ ||
+                t.type == OP_NE || t.type == OP_LT || t.type == OP_LE ||
                 t.type == OP_GT || t.type == OP_GE || t.type == OP_ADD ||
                 t.type == OP_SUB || t.type == OP_BITOR || t.type == OP_XOR ||
-                t.type == OP_MUL || t.type == OP_DIV || t.type == OP_MOD || 
+                t.type == OP_MUL || t.type == OP_DIV || t.type == OP_MOD ||
                 t.type == OP_LSHIFT || t.type == OP_RSHIFT || t.type == OP_BITAND ||
                 t.type == OP_XOR) {
-                node->ae.named.binaryOp = t.type;
-            }
-            t = next(f);
-            node->ae.named.rhs = parseExpression(t);
-        }
+                node->ae.named.binaryOp = t.type;                
+                node->ae.named.lhs = tmp;
+                t = next(f);
+                node->ae.named.rhs = parseExpression(t);
+            }  
+        }   
         return node;
     };
     parseUnaryExpr = [&](Token&t)->AstNode* {
         AstUnaryExpr* node = nullptr;
-        if (auto*tmp = parsePrimaryExpr(t); tmp != nullptr) {
-            node = new AstUnaryExpr;
-            node->aue.primaryExpr = tmp;
-        }
-        else if (t.type == OP_ADD || t.type == OP_SUB || t.type == OP_NOT || 
+         if (t.type == OP_ADD || t.type == OP_SUB || t.type == OP_NOT || 
             t.type == OP_XOR || t.type == OP_MUL || t.type == OP_BITAND || t.type == OP_CHAN) {
             node = new AstUnaryExpr;
             node->aue.named.unaryOp = t.type;
             t = next(f);
             node->aue.named.unaryExpr = parseUnaryExpr(t);
+        }else if (auto*tmp = parsePrimaryExpr(t); tmp != nullptr) {
+            node = new AstUnaryExpr;
+            node->aue.primaryExpr = tmp;
         }
         return node;
     };
@@ -1904,7 +1933,7 @@ const AstNode* parse(const string & filename) {
             node = new AstPrimaryExpr;
             node->ape.methodExpr = tmp;
         }
-        else if (auto*tmp = parseExpression(t); tmp != nullptr) {
+        else if (auto*tmp = parsePrimaryExpr(t); tmp != nullptr) {
             node = new AstPrimaryExpr;
             if (auto*tmp1 = parseSelector(t); tmp1 != nullptr) {
                 node->ape.selector.primaryExpr = tmp;
@@ -2014,8 +2043,9 @@ const AstNode* parse(const string & filename) {
         }
         else if (t.type==OP_LPAREN) {
             node = new AstOperand;
+            t = next(f);
             node->ao.expression = parseExpression(t);
-            expect(OP_RPAREN, "expect )");
+            eat(OP_RPAREN, "expect )");
         }
         return node;
     };
@@ -2057,7 +2087,9 @@ const AstNode* parse(const string & filename) {
         if (t.type == LITERAL_INT || t.type == LITERAL_FLOAT || t.type == LITERAL_IMG ||
             t.type == LITERAL_RUNE || t.type == LITERAL_STR) {
             node = new AstBasicLit;
-            node->lit = t.type;
+            node->type = t.type;
+            node->value = t.lexeme;
+            t = next(f);
         }
         return node;
     };
@@ -2247,8 +2279,8 @@ void printLex(const string & filename) {
 }
 
 int main() {
-    const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\import.go";
-    printLex(filename);
+    const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\consts.go";
+   // printLex(filename);
     const AstNode* ast = parse(filename);
     getchar();
     return 0;
