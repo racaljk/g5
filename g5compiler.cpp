@@ -6,7 +6,6 @@
 //
 // Written by racaljk@github<1948638989@qq.com>
 //===----------------------------------------------------------------------===//
-#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <exception>
@@ -454,9 +453,11 @@ skip_comment_and_find_next:
     }
     if (f.eof()) {
         if (shouldEof) {
+            lastToken = TK_EOF;
             return Token(TK_EOF, "");
         }
         shouldEof = 1;
+        lastToken = OP_SEMI;
         return Token(OP_SEMI, ";");
     }
 
@@ -537,7 +538,8 @@ skip_comment_and_find_next:
                     type = LITERAL_FLOAT;
                 }
                 else {
-                    type = OP_DOT;
+                    lastToken = OP_DOT;
+                    return Token(OP_DOT, ".");
                 }
                 goto shall_float;
             }
@@ -931,11 +933,10 @@ const AstNode* parse(const string & filename) {
             node = new  AstIdentifierList;
             node->identifierList.emplace_back(t.lexeme);
             t = next(f);
-            if (t.type == OP_COMMA)
-                while (t.type == OP_COMMA) {
-                    node->identifierList.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme);
-                    t = next(f);
-                }
+            while (t.type == OP_COMMA) {
+                node->identifierList.emplace_back(expect(TK_ID, "it shall be an identifier").lexeme);
+                t = next(f);
+            }
         }
         return node;
     };
@@ -944,12 +945,10 @@ const AstNode* parse(const string & filename) {
         if (auto* tmp = parseExpression(t); tmp != nullptr) {
             node = new  AstExpressionList;
             node->expressionList.emplace_back(tmp);
-            if (t.type == OP_COMMA) {
-                while (t.type == OP_COMMA) {
-                    t = next(f);
-                    node->expressionList.emplace_back(parseExpression(t));
-                }
-            }
+            while (t.type == OP_COMMA) {
+                t = next(f);
+                node->expressionList.emplace_back(parseExpression(t));
+            } 
         }
         return node;
     };
@@ -967,6 +966,7 @@ const AstNode* parse(const string & filename) {
             }
             while (t.type != TK_EOF) {
                 node->topLevelDecl.push_back(parseTopLevelDecl(t));
+                t = next(f);
             }
         }
         
@@ -1055,7 +1055,6 @@ const AstNode* parse(const string & filename) {
                     node->identifierList.push_back(parseIdentifierList(t));
                     if (auto*tmp = parseType(t);tmp!=nullptr) {
                         node->type.push_back(tmp);
-                        t = next(f);
                     }
                     else {
                         node->type.push_back(nullptr);
@@ -1123,9 +1122,10 @@ const AstNode* parse(const string & filename) {
             if(t.type == OP_DOT) {
                 t = next(f);
                 typeName.operator+=(".").operator+=(t.lexeme);
+                t = next(f);
             }
             node->typeName = typeName;
-            t = next(f);
+            
         }
         return node;
     };
@@ -1205,6 +1205,7 @@ const AstNode* parse(const string & filename) {
                 eat(OP_SEMI, "expect an explicit semicolon");
             } while (t.type != OP_RBRACE);
             eat(OP_RBRACE, "expect }");
+            eat(OP_SEMI, "expect ;");
         }
         return node;
     };
@@ -1765,7 +1766,6 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    //error prone
     parseForClause = [&](Token&t)->AstNode* {
         AstForClause * node =nullptr;
         if(auto*tmp=parseSimpleStmt(t);tmp!=nullptr){
@@ -1778,7 +1778,6 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    // error prone
     parseRangeClause = [&](Token&t)->AstNode* {
         AstRangeClause*node = nullptr;
         if (auto*tmp = parseExpressionList(t); tmp != nullptr) {
@@ -2106,13 +2105,11 @@ const AstNode* parse(const string & filename) {
         if (auto*tmp = parseStructType(t); tmp != nullptr) {
             node = new AstCompositeLit;
             node->literalType = tmp;
-            t = next(f);
             node->literalValue = parseLiteralValue(t);
         }
         else if (auto*tmp = parseArrayType(t); tmp != nullptr) {
             node = new AstCompositeLit;
             node->literalType = tmp;
-            t = next(f);
             node->literalValue = parseLiteralValue(t);
         }
         else if (t.type == OP_LBRACKET) {
@@ -2120,25 +2117,21 @@ const AstNode* parse(const string & filename) {
             expect(OP_VARIADIC, "expect variadic");
             expect(OP_RBRACKET, "expect ]");
             node->literalType = parseType(t);
-            t = next(f);
             node->literalValue = parseLiteralValue(t);
         }
         else if (auto*tmp = parseSliceType(t); tmp != nullptr) {
             node = new AstCompositeLit;
             node->literalType = tmp;
-            t = next(f);
             node->literalValue = parseLiteralValue(t);
         }
         else if(auto*tmp = parseMapType(t); tmp != nullptr) {
             node = new AstCompositeLit;
             node->literalType = tmp;
-            t = next(f);
             node->literalValue = parseLiteralValue(t);
         }
         else if (auto*tmp = parseTypeName(t); tmp != nullptr) {
             node = new AstCompositeLit;
             node->literalType = tmp;
-            t = next(f);
             node->literalValue = parseLiteralValue(t);
         }
         return node;
@@ -2280,7 +2273,7 @@ void runtimeStub() {}
 //===----------------------------------------------------------------------===//
 void printLex(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
-    while (f.good() && !shouldEof) {
+    while (lastToken!=TK_EOF) {
         auto[token, lexeme] = next(f);
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
     }
@@ -2290,6 +2283,8 @@ int main() {
     const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\typedecl.go";
     //printLex(filename);
     const AstNode* ast = parse(filename);
+    fprintf(stdout,"parsing passed\n");
+    fflush(stdin);
     getchar();
     return 0;
 }

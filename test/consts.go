@@ -1,5 +1,6 @@
 package main
 
+
 // The result of Scan is one of these tokens or a Unicode character.
 const (
 	EOF = -(iota + 1)
@@ -15,12 +16,6 @@ const (
 
 const k = 5
 
-const(
-    kk
-	aa,bb,cc int=1,2,4
-	dd,ee,ff
-)
-
 const (
 	ScanIdents     = 1 << -Ident
 	ScanInts       = 1 << -Int
@@ -33,3 +28,9 @@ const (
 	GoTokens       = ScanIdents | ScanFloats | ScanChars | ScanStrings | ScanRawStrings | ScanComments | SkipComments
 )
 
+
+const(
+    kk
+	aa,bb,cc int=7,2,4
+	dd,ee,ff
+)
