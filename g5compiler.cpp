@@ -1092,13 +1092,12 @@ const AstNode* parse(const string & filename) {
                     throw runtime_error("expect an explicit semicolon");
                 }
             }
+            eat(OP_SEMI, "expect ;");
         }
-        eat(OP_SEMI, "expect ;");
         return node;
     };
     parseType = [&](Token&t)->AstNode* {
         AstType * node = nullptr;
-        // Declaration   = ConstDecl | TypeDecl | VarDecl .
         if (auto*tmp = parseTypeName(t); tmp != nullptr) {
             node = new AstType;
             node->at.typeName = tmp;
@@ -1120,12 +1119,13 @@ const AstNode* parse(const string & filename) {
             node = new AstTypeName;
             string typeName;
             typeName += t.lexeme;
-            if (t.lexeme == grt.package) {
-                //qualified identifier
-                typeName += expect(OP_DOT, "qualified identifier required an dot as its delimiter").lexeme;
-                typeName += expect(OP_DOT, "expect an identifier after dot delimiter").lexeme;
+            t = next(f);
+            if(t.type == OP_DOT) {
+                t = next(f);
+                typeName.operator+=(".").operator+=(t.lexeme);
             }
             node->typeName = typeName;
+            t = next(f);
         }
         return node;
     };
@@ -1169,8 +1169,12 @@ const AstNode* parse(const string & filename) {
         AstArrayType* node = nullptr;
         if (t.type == OP_LBRACKET) {
             node = new AstArrayType;
-            node->length = parseExpression(t);
-            expect(OP_RBRACKET, "bracket [] must match in array type declaration");
+            t = next(f);
+            if (t.type != OP_RBRACKET) {
+                node->length = parseExpression(t);
+                t = next(f);
+            }
+            t = next(f);
             node->elementType = parseType(t);
         }
         return node;
@@ -1180,6 +1184,7 @@ const AstNode* parse(const string & filename) {
         if (t.type == KW_struct) {
             node = new  AstStructType;
             expect(OP_LBRACE, "left brace { must exist in struct type declaration");
+            t = next(f);
             do {
                 AstStructType::_FieldDecl fd;
                 if (auto * tmp = parseIdentifierList(t); tmp != nullptr) {
@@ -1197,7 +1202,9 @@ const AstNode* parse(const string & filename) {
                     tag = t.lexeme;
                 }
                 node->fields.push_back(make_tuple(fd,tag));
+                eat(OP_SEMI, "expect an explicit semicolon");
             } while (t.type != OP_RBRACE);
+            eat(OP_RBRACE, "expect }");
         }
         return node;
     };
@@ -1205,6 +1212,7 @@ const AstNode* parse(const string & filename) {
         AstPointerType* node = nullptr;
         if (t.type == OP_MUL) {
             node = new AstPointerType;
+            t = next(f);
             node->baseType = parseType(t);
         }
         return node;
@@ -1369,7 +1377,7 @@ const AstNode* parse(const string & filename) {
             node = new AstTypeSpec;
             node->identifier = t.lexeme;
             t = next(f);
-            if (t.type == OP_EQ) {
+            if (t.type == OP_AGN) {
                 t = next(f);
             }
             node->type = parseType(t);
@@ -2054,10 +2062,10 @@ const AstNode* parse(const string & filename) {
         if (t.type == TK_ID) {
             node = new AstOperandName;
             string operandName = t.lexeme;
-            if (operandName == grt.package) {
-                expect(OP_DOT, "expect dot");
+            t = next(f);
+            if (t.type == OP_DOT) {
                 t = next(f);
-                operandName += t.lexeme;
+                operandName.operator+=(".").operator+=(t.lexeme);
                 node->operandName = operandName;
             }
             else {
@@ -2272,15 +2280,15 @@ void runtimeStub() {}
 //===----------------------------------------------------------------------===//
 void printLex(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
-    while (f.good()) {
+    while (f.good() && !shouldEof) {
         auto[token, lexeme] = next(f);
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
     }
 }
 
 int main() {
-    const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\consts.go";
-   // printLex(filename);
+    const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\typedecl.go";
+    //printLex(filename);
     const AstNode* ast = parse(filename);
     getchar();
     return 0;
