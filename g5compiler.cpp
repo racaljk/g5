@@ -7,7 +7,6 @@
 // Written by racaljk@github<1948638989@qq.com>
 //===----------------------------------------------------------------------===//
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <cstdio>
 #include <exception>
@@ -17,6 +16,7 @@
 #include <vector>
 #include <tuple>
 #include <map>
+#define ASTNODE :public AstNode
 using namespace std;
 
 
@@ -43,42 +43,41 @@ enum TokenType : signed int {
     LITERAL_INT, LITERAL_FLOAT, LITERAL_IMG, LITERAL_RUNE, LITERAL_STR, TK_EOF
 };
 struct AstNode { virtual ~AstNode() {} };
-struct AstIdentifierList :public AstNode { vector<string> identifierList; };
-struct AstExpressionList :public AstNode { vector<AstNode*> expressionList; };
-struct AstSourceFile :public AstNode {
-    AstNode* packageClause;
+struct AstIdentifierList ASTNODE { vector<string> identifierList; };
+struct AstExpressionList ASTNODE { vector<AstNode*> expressionList; };
+struct AstSourceFile ASTNODE {
     vector<AstNode*> importDecl;
     vector<AstNode*> topLevelDecl;
 };
-struct AstPackageClause :public AstNode { string packageName; };
-struct AstImportDecl :public AstNode { map<string, string> imports; };
-struct AstTopLevelDecl :public AstNode {
+struct AstPackageClause ASTNODE { string packageName; };
+struct AstImportDecl ASTNODE { map<string, string> imports; };
+struct AstTopLevelDecl ASTNODE {
     union {
         AstNode* decl;
         AstNode* functionDecl;
         AstNode* methodDecl;
     }atld;
 };
-struct AstDeclaration :public AstNode {
+struct AstDeclaration ASTNODE {
     union {
         AstNode* constDecl;
         AstNode* typeDecl;
         AstNode* varDecl;
     }ad;
 };
-struct AstConstDecl :public AstNode {
+struct AstConstDecl ASTNODE {
     vector<AstNode*> identifierList;
     vector<AstNode*> type;
     vector<AstNode*> expressionList;
 };
-struct AstType :public AstNode {
+struct AstType ASTNODE {
     union {
         AstNode* typeName;
         AstNode* typeLit;
     }at;
 };
-struct AstTypeName : public AstNode { string typeName; };
-struct AstTypeLit : public AstNode {
+struct AstTypeName ASTNODE { string typeName; };
+struct AstTypeLit ASTNODE {
     union {
         AstNode* arrayType;
         AstNode* structType;
@@ -90,11 +89,11 @@ struct AstTypeLit : public AstNode {
         AstNode* channelType;
     }atl;
 };
-struct AstArrayType : public AstNode {
+struct AstArrayType ASTNODE {
     AstNode* length;
     AstNode* elementType;
 };
-struct AstStructType :public AstNode {
+struct AstStructType ASTNODE {
     union _FieldDecl {
         struct {
             AstNode* identifierList;
@@ -105,26 +104,26 @@ struct AstStructType :public AstNode {
 
     vector<tuple<_FieldDecl, string>> fields;
 };
-struct AstPointerType : public AstNode { AstNode * baseType; };
-struct AstFunctionType :public AstNode { AstNode * signature; };
-struct AstSignature :public AstNode {
+struct AstPointerType ASTNODE { AstNode * baseType; };
+struct AstFunctionType ASTNODE { AstNode * signature; };
+struct AstSignature ASTNODE {
     AstNode* parameters;
     AstNode* result;
 };
-struct AstParameter :public AstNode { vector<AstNode*> parameterList; };
-struct AstParameterDecl :public AstNode {
+struct AstParameter ASTNODE { vector<AstNode*> parameterList; };
+struct AstParameterDecl ASTNODE {
     AstNode* identifierList;
     bool isVariadic = false;
     AstNode* type;
 };
-struct AstResult :public AstNode {
+struct AstResult ASTNODE {
     union {
         AstNode* parameter;
         AstNode* type;
     }ar;
 };
-struct AstInterfaceType :public AstNode { vector<AstNode*> methodSpec; };
-struct AstMethodSpec :public AstNode {
+struct AstInterfaceType ASTNODE { vector<AstNode*> methodSpec; };
+struct AstMethodSpec ASTNODE {
     union {
         struct _MethodSignature {
             AstNode* methodName;
@@ -133,20 +132,20 @@ struct AstMethodSpec :public AstNode {
         AstNode* interfaceTypeName;
     }ams;
 };
-struct AstMethodName :public AstNode { string methodName; };
-struct AstSliceType :public AstNode { AstNode* elementType; };
-struct AstMapType :public AstNode {
+struct AstMethodName ASTNODE { string methodName; };
+struct AstSliceType ASTNODE { AstNode* elementType; };
+struct AstMapType ASTNODE {
     AstNode* keyType;
     AstNode* elementType;
 };
-struct AstChannelType :public AstNode { AstNode* elementType; };
-struct AstTypeDecl :public AstNode { vector<AstNode*> typeSpec; };
-struct AstTypeSpec :public AstNode {
+struct AstChannelType ASTNODE { AstNode* elementType; };
+struct AstTypeDecl ASTNODE { vector<AstNode*> typeSpec; };
+struct AstTypeSpec ASTNODE {
     string identifier;
     AstNode* type;
 };
-struct AstVarDecl :public AstNode { vector<AstNode*> varSpec; };
-struct AstVarSpec :public AstNode {
+struct AstVarDecl ASTNODE { vector<AstNode*> varSpec; };
+struct AstVarSpec ASTNODE {
     AstNode* identifierList;
     union {
         struct {
@@ -156,15 +155,15 @@ struct AstVarSpec :public AstNode {
         AstNode* expressionList;
     }avs;
 };
-struct AstFunctionDecl :public AstNode {
+struct AstFunctionDecl ASTNODE {
     string funcName;
     AstNode* signature;
     AstNode* functionBody;
 };
-struct AstFunctionBody : public AstNode { AstNode* block; };
-struct AstBlock :public AstNode { AstNode* statementList; };
-struct AstStatementList : public AstNode { vector<AstNode*> statements; };
-struct AstStatement : public AstNode {
+struct AstFunctionBody ASTNODE { AstNode* block; };
+struct AstBlock ASTNODE { AstNode* statementList; };
+struct AstStatementList ASTNODE { vector<AstNode*> statements; };
+struct AstStatement ASTNODE {
     union {
         AstNode* declaration;
         AstNode* labeledStmt;
@@ -183,11 +182,11 @@ struct AstStatement : public AstNode {
         AstNode* deferStmt;
     }as;
 };
-struct AstLabeledStmt : public AstNode {
+struct AstLabeledStmt ASTNODE {
     string identifier;
     AstNode* statement;
 };
-struct AstSimpleStmt : public AstNode {
+struct AstSimpleStmt ASTNODE {
     union {
         AstNode* expressionStmt;
         AstNode* sendStmt;
@@ -196,23 +195,13 @@ struct AstSimpleStmt : public AstNode {
         AstNode* shortVarDecl;
     }ass;
 };
-struct AstGoStmt : public AstNode {
-    AstNode* expression;
-};
-struct AstReturnStmt : public AstNode {
-    AstNode* expressionList;
-};
-struct AstBreakStmt : public AstNode {
-    string label;
-};
-struct AstContinueStmt : public AstNode {
-    string label;
-};
-struct AstGotoStmt : public AstNode {
-    string label;
-};
-struct AstFallthroughStmt : public AstNode {};
-struct AstIfStmt :public AstNode {
+struct AstGoStmt ASTNODE { AstNode* expression; };
+struct AstReturnStmt ASTNODE { AstNode* expressionList; };
+struct AstBreakStmt ASTNODE { string label;};
+struct AstContinueStmt ASTNODE { string label;};
+struct AstGotoStmt ASTNODE { string label;};
+struct AstFallthroughStmt ASTNODE {};
+struct AstIfStmt ASTNODE {
     AstNode* condition;
     AstNode* expression;
     AstNode* block;
@@ -221,41 +210,41 @@ struct AstIfStmt :public AstNode {
         AstNode* block;
     }ais;
 };
-struct AstSwitchStmt :public AstNode {
+struct AstSwitchStmt ASTNODE {
     AstNode* condition;
     AstNode* conditionExpr;
     vector<AstNode*> exprCaseClause;
 };
-struct AstExprCaseClause : public AstNode {
+struct AstExprCaseClause ASTNODE {
     AstNode* exprSwitchCase;
     AstNode* statementList;
 };
-struct AstExprSwitchCase : public AstNode {
+struct AstExprSwitchCase ASTNODE {
     AstNode * expressionList;
     bool isDefault;
 };
-struct AstSelectStmt : public AstNode {
+struct AstSelectStmt ASTNODE {
     vector<AstNode*> commClause;
 };
-struct AstCommClause :public AstNode {
+struct AstCommClause ASTNODE {
     AstNode* commCase;
     AstNode* statementList;
 };
-struct AstCommCase :public AstNode {
+struct AstCommCase ASTNODE {
     union {
         AstNode* sendStmt;
         AstNode* recvStmt;
     }acc;
     bool isDefault;
 };
-struct AstRecvStmt :public AstNode {
+struct AstRecvStmt ASTNODE {
     union {
         AstNode* identifierList;
         AstNode* expressionList;
     }ars;
     AstNode* recvExpr;
 };
-struct AstForStmt :public AstNode {
+struct AstForStmt ASTNODE {
     union {
         AstNode* condition;
         AstNode* forClause;
@@ -263,48 +252,44 @@ struct AstForStmt :public AstNode {
     }afs;
     AstNode* block;
 };
-struct AstForClause :public AstNode {
+struct AstForClause ASTNODE {
     AstNode* initStmt;
     AstNode* condition;
     AstNode* postStmt;
 };
-struct AstRangeClause :public AstNode {
+struct AstRangeClause ASTNODE {
     union {
         AstNode* expressionList;
         AstNode* identifierList;
     }arc;
     AstNode* expression;
 };
-struct AstDeferStmt :public AstNode {
-    AstNode* expression;
-};
-struct AstExpressionStmt :public AstNode {
-    AstNode* expression;
-};
-struct AstSendStmt : public AstNode {
+struct AstDeferStmt ASTNODE { AstNode* expression;};
+struct AstExpressionStmt ASTNODE { AstNode* expression;};
+struct AstSendStmt ASTNODE {
     AstNode* receiver;
     AstNode* sender;
 };
-struct AstIncDecStmt : public AstNode {
+struct AstIncDecStmt ASTNODE {
     AstNode* expression;
     bool isInc;
 };
-struct AstAssignment :public AstNode {
+struct AstAssignment ASTNODE {
     AstNode* lhs;
     AstNode* rhs;
     TokenType assignOp;
 };
-struct AstShortVarDecl : public AstNode {
+struct AstShortVarDecl ASTNODE {
     AstNode* lhs;
     AstNode* rhs;
 };
-struct AstMethodDecl :public AstNode {
+struct AstMethodDecl ASTNODE {
     AstNode* receiver;
     string methodName;
     AstNode* signature;
     AstNode* functionBody;
 };
-struct AstExpression : public AstNode {
+struct AstExpression ASTNODE {
     union {
         struct {
             AstNode* lhs;
@@ -314,7 +299,7 @@ struct AstExpression : public AstNode {
         AstNode* unaryExpr;
     }ae;
 };
-struct AstUnaryExpr :public AstNode {
+struct AstUnaryExpr ASTNODE {
     union {
         AstNode*primaryExpr;
         struct {
@@ -323,7 +308,7 @@ struct AstUnaryExpr :public AstNode {
         }named;
     }aue;
 };
-struct AstPrimaryExpr :public AstNode {
+struct AstPrimaryExpr ASTNODE {
     union {
         AstNode* operand;
         AstNode* conversion;
@@ -350,21 +335,15 @@ struct AstPrimaryExpr :public AstNode {
         }argument;
     }ape;
 };
-struct AstSelector :public AstNode {
-    string identifier;
-};
-struct AstIndex :public AstNode {
-    AstNode* expression;
-};
-struct AstSlice :public AstNode {
+struct AstSelector ASTNODE { string identifier;};
+struct AstIndex ASTNODE { AstNode* expression;};
+struct AstSlice ASTNODE {
     AstNode*start;
     AstNode*stop;
     AstNode*step;
 };
-struct AstTypeAssertion :public AstNode {
-    AstNode*type;
-};
-struct AstArgument :public AstNode {
+struct AstTypeAssertion ASTNODE { AstNode*type;};
+struct AstArgument ASTNODE {
     union {
         AstNode*expressionList;
         struct {
@@ -374,65 +353,57 @@ struct AstArgument :public AstNode {
     }aa;
     bool isVariadic;
 };
-struct AstOperand :public AstNode {
+struct AstOperand ASTNODE {
     union {
         AstNode*literal;
         AstNode*operandName;
         AstNode*expression;
     }ao;
 };
-struct AstOperandName : public AstNode {
-    string operandName;
-};
-struct AstLiteral :public AstNode {
+struct AstOperandName ASTNODE { string operandName;};
+struct AstLiteral ASTNODE {
     union {
         AstNode*basicLit;
         AstNode*compositeLit;
         AstNode*functionLit;
     }al;
 };
-struct AstBasicLit : public AstNode {
-    TokenType lit;
-};
-struct AstCompositeLit : public AstNode {
+struct AstBasicLit ASTNODE { TokenType lit;};
+struct AstCompositeLit ASTNODE {
     AstNode*literalType;
     AstNode*literalValue;
 };
-struct AstLiteralValue : public AstNode {
-    AstNode*elementList;
-};
-struct AstElementList : public AstNode {
-    vector< AstNode*> keyedElement;
-};
-struct AstKeyedElement : public AstNode {
+struct AstLiteralValue ASTNODE { AstNode*elementList;};
+struct AstElementList ASTNODE { vector< AstNode*> keyedElement;};
+struct AstKeyedElement ASTNODE {
     AstNode*key;
     AstNode*element;
 };
-struct AstKey : public AstNode {
+struct AstKey ASTNODE {
     union {
         AstNode* fieldName;
         AstNode* expression;
         AstNode* literalValue;
     }ak;
 };
-struct AstFieldName : public AstNode {
+struct AstFieldName ASTNODE {
     string fieldName;
 };
-struct AstElement : public AstNode {
+struct AstElement ASTNODE {
     union {
         AstNode*expression;
         AstNode*literalValue;
     }ae;
 };
-struct AstFunctionLit : public AstNode {
+struct AstFunctionLit ASTNODE {
     AstNode*signature;
     AstNode*functionBody;
 };
-struct AstConversion : public AstNode {
+struct AstConversion ASTNODE {
     AstNode*type;
     AstNode*expression;
 };
-struct AstMethodExpr : public AstNode {
+struct AstMethodExpr ASTNODE {
     AstNode*receiverType;
     string methodName;
 };
@@ -931,7 +902,7 @@ const AstNode* parse(const string & filename) {
         return t;
     };
 
-    function<AstNode*(Token&)>parsePackageClause, parseImportDecl, parseTopLevelDecl,
+    function<AstNode*(Token&)> parseImportDecl, parseTopLevelDecl, parseTypeAssertion,
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
         parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
@@ -944,7 +915,7 @@ const AstNode* parse(const string & filename) {
         parseSendStmt, parseIncDecStmt, parseAssignment, parseShortVarDecl, parseExprCaseClause,
         parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
         parseRangeClause, parseSourceFile, parseMethodDecl, parseExpressionList, parseExpression,
-        parseUnaryExpr, parsePrimaryExpr, parseSelector, parseIndex, parseSlice, parseTypeAssertion,
+        parseUnaryExpr, parsePrimaryExpr, parseSelector, parseIndex, parseSlice,
         parseArgument, parseOperand, parseOperandName, parseLiteral, parseBasicLit, 
         parseLiteralValue, parseElementList, parseKeyedElement, parseKey, parseElement, 
         parseFunctionLit, parseConversion, parseMethodExpr, parseFieldName;
@@ -980,27 +951,23 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseSourceFile = [&](Token&t)->AstNode* {
-        auto node = new AstSourceFile;
-        
-
-        node->packageClause = parsePackageClause(t);
-
-        expect(OP_SEMI, "expect a semicolon");
-        t = next(f);
-        while (t.type == KW_import) {
-            node->importDecl.push_back(parseImportDecl(t));
+        AstSourceFile * node = nullptr;
+        if(t.type==KW_package){
+            grt.package = expect(TK_ID, "expect identifier").lexeme;
+            node = new AstSourceFile;
+            expect(OP_SEMI,"expect a semicolon after package declaration");
             t = next(f);
+            while (t.type == KW_import) {
+                node->importDecl.push_back(parseImportDecl(t));
+                expect(OP_SEMI, "expect semicolon after import declaration");
+                t = next(f);
+            }
+            while (t.type != TK_EOF) {
+                node->topLevelDecl.push_back(parseTopLevelDecl(t));
+            }
         }
-        while (t.type != TK_EOF) {
-            node->topLevelDecl.push_back(parseTopLevelDecl(t));
-        }
-        return node;
-    };
-    parsePackageClause = [&](Token&t)->AstNode* {
-        auto node = new AstPackageClause;
-        expect(KW_package, "a go source file should always start with \"package\" keyword");
-        node->packageName = expect(TK_ID, "expect an identifier after package keyword").lexeme;
-        grt.package = node->packageName;
+        
+        
         return node;
     };
     parseImportDecl = [&](Token&t)->AstNode* {
@@ -1756,29 +1723,39 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
+    //error prone
     parseForClause = [&](Token&t)->AstNode* {
-        AstForClause*node = new AstForClause;
-        node->initStmt = parseSimpleStmt(t);
-        expect(OP_SEMI, "expect semicolon in for clause");
-        node->condition = parseExpression(t);
-        expect(OP_SEMI, "expect semicolon in for clause");
-        node->postStmt = parseSimpleStmt(t);
+        AstForClause * node =nullptr;
+        if(auto*tmp=parseSimpleStmt(t);tmp!=nullptr){
+            node = new AstForClause;
+            node->initStmt = tmp;
+            expect(OP_SEMI,"expect semicolon in for clause");
+            node->condition = parseExpression(t);
+            expect(OP_SEMI,"expect semicolon in for clause");
+            node->postStmt = parseSimpleStmt(t);
+        }
         return node;
     };
+    // error prone
     parseRangeClause = [&](Token&t)->AstNode* {
-        AstRangeClause*node = new AstRangeClause;
+        AstRangeClause*node = nullptr;
         if (auto*tmp = parseExpressionList(t); tmp != nullptr) {
+            node = new AstRangeClause;
             node->arc.expressionList = tmp;
             expect(OP_EQ, "expect =");
             t = next(f);
         }
         else if (auto* tmp = parseIdentifierList(t); tmp != nullptr) {
+            node = new AstRangeClause;
             node->arc.identifierList = tmp;
             expect(OP_SHORTAGN, "expect :=");
             t = next(f);
         }
         
         if (t.type == KW_range) {
+            if(node==nullptr){
+                node = new AstRangeClause;
+            }
             t = next(f);
             node->expression = parseExpression(t);
         }
@@ -1819,17 +1796,17 @@ const AstNode* parse(const string & filename) {
         AstIncDecStmt* node = nullptr;
         if(auto*tmp = parseExpression(t);tmp!=nullptr){
             node = new AstIncDecStmt;
-node->expression = tmp;
-t = next(f);
-if (t.type == OP_INC) {
-    node->isInc = true;
-}
-else if (t.type == OP_DEC) {
-    node->isInc = false;
-}
-else {
-    throw runtime_error("expect ++/--");
-}
+            node->expression = tmp;
+            t = next(f);
+            if (t.type == OP_INC) {
+                node->isInc = true;
+            }
+            else if (t.type == OP_DEC) {
+                node->isInc = false;
+            }
+            else {
+                throw runtime_error("expect ++/--");
+            }
         }
         return node;
     };
@@ -1883,11 +1860,13 @@ else {
             node = new  AstExpression;
             node->ae.named.lhs = tmp;
             t = next(f);
-            if (t.type == OP_OR || t.type == OP_AND ||
-                t.type == OP_EQ || t.type == OP_NE || t.type == OP_LT || t.type == OP_LE || t.type == OP_GT ||
-                t.type == OP_GE || t.type == OP_ADD || t.type == OP_SUB || t.type == OP_BITOR || t.type == OP_XOR ||
-                t.type == OP_MUL || t.type == OP_DIV || t.type == OP_MOD || t.type == OP_LSHIFT ||
-                t.type == OP_RSHIFT || t.type == OP_BITAND || t.type == OP_XOR) {
+            if (t.type == OP_OR || t.type == OP_AND || t.type == OP_EQ || 
+                t.type == OP_NE || t.type == OP_LT || t.type == OP_LE || 
+                t.type == OP_GT || t.type == OP_GE || t.type == OP_ADD ||
+                t.type == OP_SUB || t.type == OP_BITOR || t.type == OP_XOR ||
+                t.type == OP_MUL || t.type == OP_DIV || t.type == OP_MOD || 
+                t.type == OP_LSHIFT || t.type == OP_RSHIFT || t.type == OP_BITAND ||
+                t.type == OP_XOR) {
                 node->ae.named.binaryOp = t.type;
             }
             t = next(f);
@@ -1901,8 +1880,8 @@ else {
             node = new AstUnaryExpr;
             node->aue.primaryExpr = tmp;
         }
-        else if (t.type == OP_ADD || t.type == OP_SUB || t.type == OP_NOT || t.type == OP_XOR
-            || t.type == OP_MUL || t.type == OP_BITAND || t.type == OP_CHAN) {
+        else if (t.type == OP_ADD || t.type == OP_SUB || t.type == OP_NOT || 
+            t.type == OP_XOR || t.type == OP_MUL || t.type == OP_BITAND || t.type == OP_CHAN) {
             node = new AstUnaryExpr;
             node->aue.named.unaryOp = t.type;
             t = next(f);
@@ -2253,6 +2232,7 @@ else {
 }
 
 void emitStub() {}
+
 void runtimeStub() {}
 
 //===----------------------------------------------------------------------===//
@@ -2267,9 +2247,9 @@ void printLex(const string & filename) {
 }
 
 int main() {
-    const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\consts.go";
+    const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\import.go";
     printLex(filename);
-    parse(filename);
+    const AstNode* ast = parse(filename);
     getchar();
     return 0;
 }

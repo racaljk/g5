@@ -17,3 +17,13 @@ import (
 	"unicode"
 	"unicode/utf8"
 )
+import (
+	"fmt"
+	"math"
+
+	"cmd/compile/internal/gc"
+	"cmd/compile/internal/ssa"
+	"cmd/compile/internal/types"
+	"cmd/internal/obj"
+	"cmd/internal/obj/x86"
+)
