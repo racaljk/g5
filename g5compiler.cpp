@@ -454,9 +454,11 @@ skip_comment_and_find_next:
     }
     if (f.eof()) {
         if (shouldEof) {
+            lastToken = TK_EOF;
             return Token(TK_EOF, "");
         }
         shouldEof = 1;
+        lastToken = OP_SEMI;
         return Token(OP_SEMI, ";");
     }
 
@@ -1123,9 +1125,10 @@ const AstNode* parse(const string & filename) {
             if(t.type == OP_DOT) {
                 t = next(f);
                 typeName.operator+=(".").operator+=(t.lexeme);
+                t = next(f);
             }
             node->typeName = typeName;
-            t = next(f);
+            
         }
         return node;
     };
@@ -2280,7 +2283,7 @@ void runtimeStub() {}
 //===----------------------------------------------------------------------===//
 void printLex(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
-    while (f.good() && !shouldEof) {
+    while (lastToken!=TK_EOF) {
         auto[token, lexeme] = next(f);
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
     }
@@ -2290,6 +2293,6 @@ int main() {
     const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\typedecl.go";
     //printLex(filename);
     const AstNode* ast = parse(filename);
-    getchar();
+    //getchar();
     return 0;
 }
