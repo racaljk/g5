@@ -2289,12 +2289,14 @@ void printLex(const string & filename) {
     }
 }
 
-int main() {
-    const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\adhoc\\vardecl.go";
+int main(int argc, char *argv[]){
+    //const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\adhoc\\vardecl.go";
     //printLex(filename);
-    const AstNode* ast = parse(filename);
+    if (argc < 2) {
+        fprintf(stderr, "specify your go source file\n");
+        return 1;
+    }
+    const AstNode* ast = parse(argv[1]);
     fprintf(stdout,"parsing passed\n");
-    fflush(stdin);
-    getchar();
     return 0;
 }
