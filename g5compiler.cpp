@@ -112,9 +112,10 @@ struct AstSignature ASTNODE {
 };
 struct AstParameter ASTNODE { vector<AstNode*> parameterList; };
 struct AstParameterDecl ASTNODE {
-    AstNode* identifierList;
     bool isVariadic = false;
+    bool hasName = false;
     AstNode* type;
+    string name;
 };
 struct AstResult ASTNODE {
     union {
@@ -1257,7 +1258,7 @@ const AstNode* parse(const string & filename) {
         AstParameter* node = nullptr;
         if (t.type == OP_LPAREN) {
             node = new AstParameter;
-            t = next(f);
+            t = next(f); 
             do {
                 if (auto * tmp = parseParameterDecl(t); tmp != nullptr) {
                     node->parameterList.push_back(tmp);
@@ -1267,27 +1268,53 @@ const AstNode* parse(const string & filename) {
                 }
             } while (t.type != OP_RPAREN);
             t = next(f);
+            int shouldHaveName;
+            for (int i = 0; i < node->parameterList.size(); i++) {
+                if (node->parameterList[i].hasName == true) {
+                    bool rewriteBefore = true;
+                    for (int k = 0; k < i; k++) {
+                        if (node->parameterList[k] != false) {
+                            rewriteBefore = false;
+                            break;
+                        }
+                    }
+                    if (rewriteBefore == true) {
+                        for (int k = 0; k < i; k++) {
+                            string name = dynamic_cast<AstTypeName*>(
+                                dynamic_cast<AstType*>(node->parameterList[k].type)->at.typeName)->typeName;
+                            node->parameterList[k].type = node.parameterList[i].type;
+                            node->parameterList[k].name = name;
+                            node->parameterList[k].hasName = true; //It's not necessary
+                        }
+                    }
+                }
+            }
         }
         return node;
     };
     parseParameterDecl = [&](Token&t)->AstNode* {
         AstParameterDecl* node = nullptr;
-        if (t.type == TK_ID) {
-            string name = t.lexeme;
-            t = next(f);
-            //todo
-        }
-        else if (t.type == OP_VARIADIC) {
-            node = new AstParameterDecl;
+        if (t.type == OP_VARIADIC) {
             node->isVariadic = true;
             t = next(f);
             node->type = parseType(t);
         }
         else {
-            node = new AstParameterDecl;
-            node->type = parseType(t);
+            auto*mayIdentOrType = parseType(t);
+            if (t.type != OP_COMMA) {
+                node->hasName = true;
+                if (t.type == OP_VARIADIC) {
+                    node->isVariadic = true;
+                    t = next(f);
+                }
+                node->name = dynamic_cast<AstTypeName*>(
+                    dynamic_cast<AstType*>(mayIdentOrType)->at.typeName)->typeName;
+                node->type = parseType(t);
+            }
+            else {
+                node->type = mayIdentOrType;
+            }
         }
-
         return node;
     };
     parseResult = [&](Token&t)->AstNode* {
