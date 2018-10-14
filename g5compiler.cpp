@@ -1214,7 +1214,9 @@ const AstNode* parse(const string & filename) {
                     tag = t.lexeme;
                 }
                 node->fields.push_back(make_tuple(fd,tag));
-                eat(OP_SEMI, "expect an explicit semicolon");
+                if (t.type == OP_SEMI) {
+                    t = next(f);
+                }            
             } while (t.type != OP_RBRACE);
             eat(OP_RBRACE, "expect }");
             eat(OP_SEMI, "expect ;");
@@ -1338,9 +1340,10 @@ const AstNode* parse(const string & filename) {
         AstMapType* node = nullptr;
         if (t.type == KW_map) {
             node = new AstMapType;
-            expect(OP_LBRACKET, "bracket [] must match in map type declaration");
+            t = next(f);
+            eat(OP_LBRACKET, "bracket [] must match in map type declaration");
             node->keyType = parseType(t);
-            expect(OP_RBRACKET, "bracket [] must match in map type declaration");
+            eat(OP_RBRACKET, "bracket [] must match in map type declaration");
             node->elementType = parseType(t);
         }
         return node;

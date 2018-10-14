@@ -1,5 +1,6 @@
 package main 
-
+type Point3D struct { x, y, z float64}
+type Line struct { p, q Point3D }
 type k int
 
 type Regexp struct {
@@ -8,8 +9,7 @@ type Regexp struct {
 
 	// cache of machines for running regexp
 	mu      sync.Mutex
-	machine []*machine
-}
+	machine []*machine}
 
 type regexpRO struct {
 	expr           string         // as passed to Compile
@@ -26,5 +26,3 @@ type regexpRO struct {
 	longest        bool
 }
 
-type Point3D struct { x, y, z float64 }
-type Line struct { p, q Point3D }

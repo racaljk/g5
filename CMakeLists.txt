@@ -3,6 +3,14 @@ project(g5)
 
 set(CMAKE_CXX_STANDARD 17)
 
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  set(CMAKE_CXX_FLAGS "-fpermissive")
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  set(CMAKE_CXX_FLAGS "-fpermissive")
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+  set(CMAKE_CXX_FLAGS "/sdl-")
+endif()
+
 set(SOURCE_FILES g5compiler.cpp)
 add_executable(g5 ${SOURCE_FILES})
 
