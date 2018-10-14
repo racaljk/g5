@@ -41,6 +41,7 @@ enum TokenType : signed int {
     OP_NOT, OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORAGN, TK_ID,
     LITERAL_INT, LITERAL_FLOAT, LITERAL_IMG, LITERAL_RUNE, LITERAL_STR, TK_EOF
 };
+//todo: add destructors for these structures
 struct AstNode { virtual ~AstNode() {} };
 struct AstIdentifierList ASTNODE { vector<string> identifierList; };
 struct AstExpressionList ASTNODE { vector<AstNode*> expressionList; };
@@ -1121,7 +1122,7 @@ const AstNode* parse(const string & filename) {
             t = next(f);
             node = dynamic_cast<AstType*>(parseType(t));
             expect(OP_RPAREN, "the parenthesis () must match in type declaration");
-        }
+   
         return node;
     };
     parseTypeName = [&](Token&t)->AstNode* {
@@ -1238,6 +1239,7 @@ const AstNode* parse(const string & filename) {
         AstFunctionType* node = nullptr;
         if (t.type == KW_func) {
             node = new AstFunctionType;
+            t = next(f);
             node->signature = parseSignature(t);
         }
         return node;
@@ -1255,6 +1257,7 @@ const AstNode* parse(const string & filename) {
         AstParameter* node = nullptr;
         if (t.type == OP_LPAREN) {
             node = new AstParameter;
+            t = next(f);
             do {
                 if (auto * tmp = parseParameterDecl(t); tmp != nullptr) {
                     node->parameterList.push_back(tmp);
@@ -1263,23 +1266,28 @@ const AstNode* parse(const string & filename) {
                     t = next(f);
                 }
             } while (t.type != OP_RPAREN);
+            t = next(f);
         }
         return node;
     };
     parseParameterDecl = [&](Token&t)->AstNode* {
         AstParameterDecl* node = nullptr;
-        if (auto*tmp = parseIdentifierList(t); tmp != nullptr) {
-            node = new AstParameterDecl;
-            node->identifierList = tmp;
+        if (t.type == TK_ID) {
+            string name = t.lexeme;
+            t = next(f);
+            //todo
         }
-        if (t.type == OP_VARIADIC) {
+        else if (t.type == OP_VARIADIC) {
             node = new AstParameterDecl;
             node->isVariadic = true;
+            t = next(f);
+            node->type = parseType(t);
         }
-        if (auto*tmp = parseType(t); tmp != nullptr) {
+        else {
             node = new AstParameterDecl;
-            node->type = tmp;
+            node->type = parseType(t);
         }
+
         return node;
     };
     parseResult = [&](Token&t)->AstNode* {
@@ -1333,6 +1341,7 @@ const AstNode* parse(const string & filename) {
         if (t.type == TK_ID) {
             node = new AstMethodName;
             node->methodName = t.lexeme;
+            t = next(f);
         }
         return node;
     };

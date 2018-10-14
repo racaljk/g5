@@ -20,3 +20,4 @@ add_test(NAME test_import COMMAND g5  "${PROJECT_SOURCE_DIR}/test/adhoc/import.g
 add_test(NAME test_vardecl COMMAND g5  "${PROJECT_SOURCE_DIR}/test/adhoc/vardecl.go")
 add_test(NAME test_typedecl COMMAND g5  "${PROJECT_SOURCE_DIR}/test/adhoc/typedecl.go")
 add_test(NAME test_type COMMAND g5  "${PROJECT_SOURCE_DIR}/test/adhoc/type.go")
+add_test(NAME test_func COMMAND g5  "${PROJECT_SOURCE_DIR}/test/adhoc/func.go")

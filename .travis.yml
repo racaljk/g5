@@ -2,7 +2,6 @@ language: cpp
 sudo: required
 dist: trusty
 compiler:
-  - clang
   - gcc
 os:
   - linux
@@ -11,4 +10,3 @@ script:
   - cd build
   - cmake ..
   - make -j8
-  - make test
