@@ -1186,7 +1186,9 @@ const AstNode* parse(const string & filename) {
                 node->length = parseExpression(t);
                 t = next(f);
             }
-            t = next(f);
+            else {
+                t = next(f);
+            }
             node->elementType = parseType(t);
         }
         return node;
@@ -1294,16 +1296,23 @@ const AstNode* parse(const string & filename) {
     };
     parseInterfaceType = [&](Token&t)->AstNode* {
         AstInterfaceType* node = nullptr;
-        if (t.type == OP_LBRACE) {
-            do {
-                if (auto*tmp = parseMethodSpec(t); tmp != nullptr) {
-                    node = new AstInterfaceType;
-                    node->methodSpec.push_back(tmp);
-                    expect(OP_SEMI, "expect a semicolon after method specification");
-                }
-            } while (t.type != OP_RBRACE);
+        if (t.type == KW_interface) {
+            t = next(f);
+            if (t.type == OP_LBRACE) {
+                t = next(f);
+                do {
+                    if (auto*tmp = parseMethodSpec(t); tmp != nullptr) {
+                        node = new AstInterfaceType;
+                        node->methodSpec.push_back(tmp);
+                        if (t.type == OP_SEMI) {
+                            t = next(f);
+                        }
+                    }
+                } while (t.type != OP_RBRACE);
+                t = next(f);
+            }
         }
-
+        
         return node;
     };
     parseMethodSpec = [&](Token&t)->AstNode* {
@@ -1376,9 +1385,12 @@ const AstNode* parse(const string & filename) {
             node = new AstTypeDecl;
             t = next(f);
             if (t.type == OP_LPAREN) {
+                t = next(f);
                 do {
                     node->typeSpec.push_back(parseTypeSpec(t));
-                    expect(OP_SEMI, "expect a semicolon after each type specification");
+                    if (t.type == OP_SEMI) {
+                        t = next(f);
+                    }
                 } while (t.type != OP_RPAREN);
             }
             else {
