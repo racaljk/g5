@@ -1,5 +1,7 @@
 package main
 
+package main
+
 import (
 	"fmt"
 	_ "go/ast"
@@ -158,4 +160,4 @@ func task(startID int){
 	for i:=0;i<5;i++{
 		fmt.Println("goroutine:",startID,"- number:",i)
 	}
-}
+}QA

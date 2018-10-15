@@ -198,9 +198,9 @@ struct AstSimpleStmt ASTNODE {
 };
 struct AstGoStmt ASTNODE { AstNode* expression; };
 struct AstReturnStmt ASTNODE { AstNode* expressionList; };
-struct AstBreakStmt ASTNODE { string label;};
-struct AstContinueStmt ASTNODE { string label;};
-struct AstGotoStmt ASTNODE { string label;};
+struct AstBreakStmt ASTNODE { string label; };
+struct AstContinueStmt ASTNODE { string label; };
+struct AstGotoStmt ASTNODE { string label; };
 struct AstFallthroughStmt ASTNODE {};
 struct AstIfStmt ASTNODE {
     AstNode* condition;
@@ -265,8 +265,8 @@ struct AstRangeClause ASTNODE {
     }arc;
     AstNode* expression;
 };
-struct AstDeferStmt ASTNODE { AstNode* expression;};
-struct AstExpressionStmt ASTNODE { AstNode* expression;};
+struct AstDeferStmt ASTNODE { AstNode* expression; };
+struct AstExpressionStmt ASTNODE { AstNode* expression; };
 struct AstSendStmt ASTNODE {
     AstNode* receiver;
     AstNode* sender;
@@ -330,21 +330,21 @@ struct AstPrimaryExpr ASTNODE {
         }argument;
     }ape;
 };
-struct AstSelector ASTNODE { string identifier;};
-struct AstIndex ASTNODE { AstNode* expression;};
+struct AstSelector ASTNODE { string identifier; };
+struct AstIndex ASTNODE { AstNode* expression; };
 struct AstSlice ASTNODE {
     AstNode*start;
     AstNode*stop;
     AstNode*step;
 };
-struct AstTypeAssertion ASTNODE { AstNode*type;};
+struct AstTypeAssertion ASTNODE { AstNode*type; };
 struct AstArgument ASTNODE {
     union {
         AstNode*expressionList;
         struct {
             AstNode*type;
             AstNode*expressionList;
-        }named;    
+        }named;
     }aa;
     bool isVariadic;
 };
@@ -355,7 +355,7 @@ struct AstOperand ASTNODE {
         AstNode*expression;
     }ao;
 };
-struct AstOperandName ASTNODE { string operandName;};
+struct AstOperandName ASTNODE { string operandName; };
 struct AstLiteral ASTNODE {
     union {
         AstNode*basicLit;
@@ -381,7 +381,7 @@ struct AstCompositeLit ASTNODE {
     }acl;
     AstNode*literalValue;
 };
-struct AstLiteralValue ASTNODE { vector< AstNode*> keyedElement;};
+struct AstLiteralValue ASTNODE { vector< AstNode*> keyedElement; };
 struct AstKeyedElement ASTNODE {
     AstNode*key;
     AstNode*element;
@@ -911,7 +911,7 @@ const AstNode* parse(const string & filename) {
         t = next(f);
     };
 
-    auto expect = [&f,&t](TokenType tk, const string& msg) {
+    auto expect = [&f, &t](TokenType tk, const string& msg) {
         t = next(f);
         if (t.type != tk) throw runtime_error(msg);
         return t;
@@ -923,7 +923,7 @@ const AstNode* parse(const string & filename) {
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
         parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType,
         parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec, parseFunctionDecl,
-        parseStatementList, parseStatement, parseCompositeLit, parseFieldName, parseConversion, 
+        parseStatementList, parseStatement, parseCompositeLit, parseFieldName, parseConversion,
         parseLabeledStmt, parseSimpleStmt, parseGoStmt, parseReturnStmt, parseBreakStmt,
         parseContinueStmt, parseGotoStmt, parseFallthroughStmt, parseBlock, parseIfStmt,
         parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExpressionStmt,
@@ -931,9 +931,9 @@ const AstNode* parse(const string & filename) {
         parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
         parseRangeClause, parseSourceFile, parseExpressionList, parseExpression,
         parseUnaryExpr, parsePrimaryExpr, parseSelector, parseIndex, parseSlice,
-        parseArgument, parseOperand, parseOperandName, parseLiteral, parseBasicLit, 
-        parseLiteralValue, parseElementList, parseKeyedElement, parseKey, parseElement, 
-        parseFunctionLit,parseMethodExpr;
+        parseArgument, parseOperand, parseOperandName, parseLiteral, parseBasicLit,
+        parseLiteralValue, parseElementList, parseKeyedElement, parseKey, parseElement,
+        parseFunctionLit, parseMethodExpr;
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         AstIdentifierList* node = nullptr;
@@ -956,16 +956,16 @@ const AstNode* parse(const string & filename) {
             while (t.type == OP_COMMA) {
                 t = next(f);
                 node->expressionList.emplace_back(parseExpression(t));
-            } 
+            }
         }
         return node;
     };
     parseSourceFile = [&](Token&t)->AstNode* {
         AstSourceFile * node = nullptr;
-        if(t.type==KW_package){
+        if (t.type == KW_package) {
             grt.package = expect(TK_ID, "expect identifier").lexeme;
             node = new AstSourceFile;
-            expect(OP_SEMI,"expect a semicolon after package declaration");
+            expect(OP_SEMI, "expect a semicolon after package declaration");
             t = next(f);
             while (t.type == KW_import) {
                 node->importDecl.push_back(parseImportDecl(t));
@@ -977,8 +977,8 @@ const AstNode* parse(const string & filename) {
                 t = next(f);
             }
         }
-        
-        
+
+
         return node;
     };
     parseImportDecl = [&](Token&t)->AstNode* {
@@ -1057,7 +1057,7 @@ const AstNode* parse(const string & filename) {
                 t = next(f);
                 do {
                     node->identifierList.push_back(parseIdentifierList(t));
-                    if (auto*tmp = parseType(t);tmp!=nullptr) {
+                    if (auto*tmp = parseType(t); tmp != nullptr) {
                         node->type.push_back(tmp);
                     }
                     else {
@@ -1123,13 +1123,13 @@ const AstNode* parse(const string & filename) {
             string typeName;
             typeName += t.lexeme;
             t = next(f);
-            if(t.type == OP_DOT) {
+            if (t.type == OP_DOT) {
                 t = next(f);
                 typeName.operator+=(".").operator+=(t.lexeme);
                 t = next(f);
             }
             node->typeName = typeName;
-            
+
         }
         return node;
     };
@@ -1207,7 +1207,7 @@ const AstNode* parse(const string & filename) {
                 if (t.type == LITERAL_STR) {
                     tag = t.lexeme;
                 }
-                node->fields.push_back(make_tuple(fd,tag));
+                node->fields.push_back(make_tuple(fd, tag));
                 if (t.type == OP_SEMI) {
                     t = next(f);
                 }
@@ -1248,7 +1248,7 @@ const AstNode* parse(const string & filename) {
         AstParameter* node = nullptr;
         if (t.type == OP_LPAREN) {
             node = new AstParameter;
-            t = next(f); 
+            t = next(f);
             do {
                 if (auto * tmp = parseParameterDecl(t); tmp != nullptr) {
                     node->parameterList.push_back(tmp);
@@ -1258,8 +1258,8 @@ const AstNode* parse(const string & filename) {
                 }
             } while (t.type != OP_RPAREN);
             t = next(f);
-          
-            for (int i = 0, rewriteStart=0; i < node->parameterList.size(); i++) {
+
+            for (int i = 0, rewriteStart = 0; i < node->parameterList.size(); i++) {
                 if (dynamic_cast<AstParameterDecl*>(node->parameterList[i])->hasName == true) {
                     for (int k = rewriteStart; k < i; k++) {
                         string name = dynamic_cast<AstTypeName*>(
@@ -1267,7 +1267,7 @@ const AstNode* parse(const string & filename) {
                         dynamic_cast<AstParameterDecl*>(node->parameterList[k])->type = dynamic_cast<AstParameterDecl*>(node->parameterList[i])->type;
                         dynamic_cast<AstParameterDecl*>(node->parameterList[k])->name = name;
                         dynamic_cast<AstParameterDecl*>(node->parameterList[k])->hasName = true; //It's not necessary
-                    }   
+                    }
                     rewriteStart = i + 1;
                 }
             }
@@ -1330,7 +1330,7 @@ const AstNode* parse(const string & filename) {
                 t = next(f);
             }
         }
-        
+
         return node;
     };
     parseMethodSpec = [&](Token&t)->AstNode* {
@@ -1485,7 +1485,7 @@ const AstNode* parse(const string & filename) {
     };
     parseBlock = [&](Token&t)->AstNode* {
         AstBlock * node = nullptr;
-        if (t.type==OP_LBRACE) {
+        if (t.type == OP_LBRACE) {
             node = new AstBlock;
             t = next(f);
             if (t.type != OP_RBRACE) {
@@ -1502,7 +1502,9 @@ const AstNode* parse(const string & filename) {
         if (auto * tmp = parseStatement(t); tmp != nullptr) {
             node = new AstStatementList;
             node->statements.push_back(tmp);
-            expect(OP_SEMI, "statement should seperate by semicolon");
+            if (t.type == OP_SEMI) {
+                t = next(f);
+            }
             while ((tmp = parseStatement(t))) {
                 node->statements.push_back(tmp);
                 expect(OP_SEMI, "statement should seperate by semicolon");
@@ -1516,13 +1518,13 @@ const AstNode* parse(const string & filename) {
             node = new AstStatement;
             node->as.declaration = tmp;
         }
-        else  if (auto*tmp = parseLabeledStmt(t); tmp != nullptr) {
-            node = new AstStatement;
-            node->as.labeledStmt = tmp;
-        }
         else  if (auto*tmp = parseSimpleStmt(t); tmp != nullptr) {
             node = new AstStatement;
             node->as.simpleStmt = tmp;
+        }
+        else  if (auto*tmp = parseLabeledStmt(t); tmp != nullptr) {
+            node = new AstStatement;
+            node->as.labeledStmt = tmp;
         }
         else  if (auto*tmp = parseGoStmt(t); tmp != nullptr) {
             node = new AstStatement;
@@ -1576,29 +1578,33 @@ const AstNode* parse(const string & filename) {
     };
     parseLabeledStmt = [&](Token&t)->AstNode* {
         AstLabeledStmt * node = nullptr;
-        if(t.type==TK_ID){
+        if (t.type == TK_ID) {
             node = new AstLabeledStmt;
             node->identifier = t.lexeme;
-            expect(OP_COLON,"label statement should have a colon");
+            expect(OP_COLON, "label statement should have a colon");
             node->statement = parseStatement(t);
         }
         return node;
     };
     parseSimpleStmt = [&](Token&t)->AstNode* {
         AstSimpleStmt * node = nullptr;
-        if(auto* tmp = parseExpressionStmt(t); tmp!=nullptr){
+        if (auto* tmp = parseExpressionStmt(t); tmp != nullptr) {
             node = new AstSimpleStmt;
             node->ass.expressionStmt = tmp;
-        }else if(auto* tmp = parseSendStmt(t); tmp!=nullptr){
+        }
+        else if (auto* tmp = parseSendStmt(t); tmp != nullptr) {
             node = new AstSimpleStmt;
             node->ass.sendStmt = tmp;
-        }else if(auto* tmp = parseIncDecStmt(t); tmp!=nullptr){
+        }
+        else if (auto* tmp = parseIncDecStmt(t); tmp != nullptr) {
             node = new AstSimpleStmt;
             node->ass.incDecStmt = tmp;
-        }else if(auto* tmp = parseAssignment(t); tmp!=nullptr){
+        }
+        else if (auto* tmp = parseAssignment(t); tmp != nullptr) {
             node = new AstSimpleStmt;
             node->ass.assignment = tmp;
-        }else if(auto* tmp = parseShortVarDecl(t); tmp!=nullptr){
+        }
+        else if (auto* tmp = parseShortVarDecl(t); tmp != nullptr) {
             node = new AstSimpleStmt;
             node->ass.shortVarDecl = tmp;
         }
@@ -1606,7 +1612,7 @@ const AstNode* parse(const string & filename) {
     };
     parseGoStmt = [&](Token&t)->AstNode* {
         AstGoStmt * node = nullptr;
-        if(t.type==KW_go){
+        if (t.type == KW_go) {
             node = new AstGoStmt;
             node->expression = parseExpression(t);
         }
@@ -1614,7 +1620,7 @@ const AstNode* parse(const string & filename) {
     };
     parseReturnStmt = [&](Token&t)->AstNode* {
         AstReturnStmt * node = nullptr;
-        if(t.type==KW_return){
+        if (t.type == KW_return) {
             node = new AstReturnStmt;
             node->expressionList = parseExpressionList(t);
         }
@@ -1622,12 +1628,13 @@ const AstNode* parse(const string & filename) {
     };
     parseBreakStmt = [&](Token&t)->AstNode* {
         AstBreakStmt * node = nullptr;
-        if(t.type==KW_break){
+        if (t.type == KW_break) {
             node = new AstBreakStmt;
             t = next(f);
-            if(t.type == TK_ID){
+            if (t.type == TK_ID) {
                 node->label = t.lexeme;
-            }else{
+            }
+            else {
                 node->label = nullptr;
             }
         }
@@ -1635,12 +1642,13 @@ const AstNode* parse(const string & filename) {
     };
     parseContinueStmt = [&](Token&t)->AstNode* {
         AstContinueStmt * node = nullptr;
-        if(t.type==KW_continue){
+        if (t.type == KW_continue) {
             node = new AstContinueStmt;
             t = next(f);
-            if(t.type == TK_ID){
+            if (t.type == TK_ID) {
                 node->label = t.lexeme;
-            }else{
+            }
+            else {
                 node->label = nullptr;
             }
         }
@@ -1648,39 +1656,41 @@ const AstNode* parse(const string & filename) {
     };
     parseGotoStmt = [&](Token&t)->AstNode* {
         AstGotoStmt* node = nullptr;
-        if(t.type==KW_goto){
+        if (t.type == KW_goto) {
             node = new AstGotoStmt;
-            node->label = expect(TK_ID,"goto statement must follow a label").lexeme;
+            node->label = expect(TK_ID, "goto statement must follow a label").lexeme;
         }
         return node;
     };
     parseFallthroughStmt = [&](Token&t)->AstNode* {
         AstFallthroughStmt* node = nullptr;
-        if(t.type==KW_fallthrough){
+        if (t.type == KW_fallthrough) {
             node = new AstFallthroughStmt;
         }
         return node;
     };
     parseIfStmt = [&](Token&t)->AstNode* {
         AstIfStmt* node = nullptr;
-        if(t.type==KW_fallthrough){
+        if (t.type == KW_fallthrough) {
             node = new AstIfStmt;
-            if(auto* tmp = parseSimpleStmt(t);tmp!=nullptr){
+            if (auto* tmp = parseSimpleStmt(t); tmp != nullptr) {
                 node->condition = tmp;
-                expect(OP_SEMI,"expect an semicolon in condition part of if");
+                expect(OP_SEMI, "expect an semicolon in condition part of if");
             }
-            t=next(f);
+            t = next(f);
             node->expression = parseExpression(t);
-            t=next(f);
+            t = next(f);
             node->block = parseBlock(t);
-            t=next(f);
-            if(t.type==KW_else){
-                t=next(f);
-                if(auto *tmp1=parseIfStmt(t);tmp1!=nullptr){
+            t = next(f);
+            if (t.type == KW_else) {
+                t = next(f);
+                if (auto *tmp1 = parseIfStmt(t); tmp1 != nullptr) {
                     node->ais.ifStmt = tmp1;
-                }else if(auto *tmp1=parseBlock(t);tmp1!=nullptr){
+                }
+                else if (auto *tmp1 = parseBlock(t); tmp1 != nullptr) {
                     node->ais.block = tmp1;
-                }else{
+                }
+                else {
                     throw runtime_error("else is empty");
                 }
             }
@@ -1762,12 +1772,13 @@ const AstNode* parse(const string & filename) {
         if (t.type == KW_case) {
             node = new AstCommCase;
             t = next(f);
-            if(auto*tmp = parseSendStmt(t); tmp != nullptr) {
+            if (auto*tmp = parseSendStmt(t); tmp != nullptr) {
                 node->acc.sendStmt = tmp;
             }
-            else if(auto*tmp = parseRecvStmt(t); tmp != nullptr) {
+            else if (auto*tmp = parseRecvStmt(t); tmp != nullptr) {
                 node->acc.recvStmt = tmp;
-            }else if (t.type == KW_default) {
+            }
+            else if (t.type == KW_default) {
                 node->isDefault = true;
             }
         }
@@ -1796,7 +1807,8 @@ const AstNode* parse(const string & filename) {
             t = next(f);
             if (auto*tmp = parseExpression(t); tmp != nullptr) {
                 node->afs.condition = tmp;
-            }else if (auto*tmp = parseForClause(t); tmp != nullptr) {
+            }
+            else if (auto*tmp = parseForClause(t); tmp != nullptr) {
                 node->afs.forClause = tmp;
             }
             else if (auto*tmp = parseRangeClause(t); tmp != nullptr) {
@@ -1808,13 +1820,13 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseForClause = [&](Token&t)->AstNode* {
-        AstForClause * node =nullptr;
-        if(auto*tmp=parseSimpleStmt(t);tmp!=nullptr){
+        AstForClause * node = nullptr;
+        if (auto*tmp = parseSimpleStmt(t); tmp != nullptr) {
             node = new AstForClause;
             node->initStmt = tmp;
-            expect(OP_SEMI,"expect semicolon in for clause");
+            expect(OP_SEMI, "expect semicolon in for clause");
             node->condition = parseExpression(t);
-            expect(OP_SEMI,"expect semicolon in for clause");
+            expect(OP_SEMI, "expect semicolon in for clause");
             node->postStmt = parseSimpleStmt(t);
         }
         return node;
@@ -1834,7 +1846,7 @@ const AstNode* parse(const string & filename) {
             t = next(f);
         }
         if (t.type == KW_range) {
-            if(node==nullptr){
+            if (node == nullptr) {
                 node = new AstRangeClause;
             }
             t = next(f);
@@ -1844,7 +1856,7 @@ const AstNode* parse(const string & filename) {
     };
     parseDeferStmt = [&](Token&t)->AstNode* {
         AstDeferStmt* node = nullptr;
-        if(t.type==KW_defer){
+        if (t.type == KW_defer) {
             node = new AstDeferStmt;
             node->expression = parseExpression(t);
         }
@@ -1857,7 +1869,7 @@ const AstNode* parse(const string & filename) {
     //};
     parseExpressionStmt = [&](Token&t)->AstNode* {
         AstExpressionStmt* node = nullptr;
-        if(auto*tmp = parseExpression(t);tmp!=nullptr){
+        if (auto*tmp = parseExpression(t); tmp != nullptr) {
             node = new AstExpressionStmt;
             node->expression = tmp;
         }
@@ -1865,17 +1877,17 @@ const AstNode* parse(const string & filename) {
     };
     parseSendStmt = [&](Token&t)->AstNode* {
         AstSendStmt* node = nullptr;
-        if(auto*tmp = parseExpression(t);tmp!=nullptr){
+        if (auto*tmp = parseExpression(t); tmp != nullptr) {
             node = new AstSendStmt;
             node->receiver = tmp;
-            expect(OP_CHAN,"expect a channel symbol");
+            expect(OP_CHAN, "expect a channel symbol");
             node->sender = parseExpression(t);
         }
         return node;
     };
     parseIncDecStmt = [&](Token&t)->AstNode* {
         AstIncDecStmt* node = nullptr;
-        if(auto*tmp = parseExpression(t);tmp!=nullptr){
+        if (auto*tmp = parseExpression(t); tmp != nullptr) {
             node = new AstIncDecStmt;
             node->expression = tmp;
             t = next(f);
@@ -1937,19 +1949,20 @@ const AstNode* parse(const string & filename) {
                 node->ae.named.lhs = tmp;
                 t = next(f);
                 node->ae.named.rhs = parseExpression(t);
-            }  
-        }   
+            }
+        }
         return node;
     };
     parseUnaryExpr = [&](Token&t)->AstNode* {
         AstUnaryExpr* node = nullptr;
-         if (t.type == OP_ADD || t.type == OP_SUB || t.type == OP_NOT || 
+        if (t.type == OP_ADD || t.type == OP_SUB || t.type == OP_NOT ||
             t.type == OP_XOR || t.type == OP_MUL || t.type == OP_BITAND || t.type == OP_CHAN) {
             node = new AstUnaryExpr;
             node->aue.named.unaryOp = t.type;
             t = next(f);
             node->aue.named.unaryExpr = parseUnaryExpr(t);
-        }else if (auto*tmp = parsePrimaryExpr(t); tmp != nullptr) {
+        }
+        else if (auto*tmp = parsePrimaryExpr(t); tmp != nullptr) {
             node = new AstUnaryExpr;
             node->aue.primaryExpr = tmp;
         }
@@ -1966,7 +1979,7 @@ const AstNode* parse(const string & filename) {
             node = new AstPrimaryExpr;
             node->ape.conversion = tmp;
         }
-        else if (auto*tmp = parseMethodExpr(t); tmp != nullptr){
+        else if (auto*tmp = parseMethodExpr(t); tmp != nullptr) {
             node = new AstPrimaryExpr;
             node->ape.methodExpr = tmp;
         }
@@ -1975,7 +1988,8 @@ const AstNode* parse(const string & filename) {
             if (auto*tmp1 = parseSelector(t); tmp1 != nullptr) {
                 node->ape.selector.primaryExpr = tmp;
                 node->ape.selector.selector = tmp1;
-            }else if(auto*tmp1 = parseIndex(t); tmp1 != nullptr) {
+            }
+            else if (auto*tmp1 = parseIndex(t); tmp1 != nullptr) {
                 node->ape.index.primaryExpr = tmp;
                 node->ape.index.index = tmp1;
             }
@@ -2078,7 +2092,7 @@ const AstNode* parse(const string & filename) {
             node = new AstOperand;
             node->ao.operandName = tmp;
         }
-        else if (t.type==OP_LPAREN) {
+        else if (t.type == OP_LPAREN) {
             node = new AstOperand;
             t = next(f);
             node->ao.expression = parseExpression(t);
@@ -2137,11 +2151,6 @@ const AstNode* parse(const string & filename) {
             node->acl.structType = tmp;
             node->literalValue = parseLiteralValue(t);
         }
-        //else if (auto*tmp = parseArrayType(t); tmp != nullptr) {
-        //    node = new AstCompositeLit;
-        //    node->literalType = tmp;
-        //    node->literalValue = parseLiteralValue(t);
-        //}
         else if (t.type == OP_LBRACKET) {
             node = new AstCompositeLit;
             t = next(f);
@@ -2152,7 +2161,7 @@ const AstNode* parse(const string & filename) {
                 node->acl.automaticLengthArrayType.elementType = parseType(t);
             }
             else {
-                if(t.type!=OP_RBRACKET){
+                if (t.type != OP_RBRACKET) {
                     node->acl.arrayType.arrayLength = parseExpression(t);
                 }
                 else {
@@ -2167,7 +2176,7 @@ const AstNode* parse(const string & filename) {
             node->acl.sliceType = tmp;
             node->literalValue = parseLiteralValue(t);
         }
-        else if(auto*tmp = parseMapType(t); tmp != nullptr) {
+        else if (auto*tmp = parseMapType(t); tmp != nullptr) {
             node = new AstCompositeLit;
             node->acl.mapType = tmp;
             node->literalValue = parseLiteralValue(t);
@@ -2203,7 +2212,7 @@ const AstNode* parse(const string & filename) {
             if (t.type == OP_COLON) {
                 node->key = tmp;
                 t = next(f);
-                if (auto*tmp1 = parseElement(t);tmp1!=nullptr) {
+                if (auto*tmp1 = parseElement(t); tmp1 != nullptr) {
                     node->element = tmp1;
                 }
             }
@@ -2288,7 +2297,7 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     // parsing startup
-    
+
     return parseSourceFile(t);
 }
 
@@ -2301,19 +2310,19 @@ void runtimeStub() {}
 //===----------------------------------------------------------------------===//
 void printLex(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
-    while (lastToken!=TK_EOF) {
+    while (lastToken != TK_EOF) {
         auto[token, lexeme] = next(f);
         fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
     }
 }
 
-int main(int argc, char *argv[]){
+int main(int argc, char *argv[]) {
     //printLex(filename);
     if (argc < 2) {
         fprintf(stderr, "specify your go source file\n");
         return 1;
     }
     const AstNode* ast = parse(argv[1]);
-    fprintf(stdout,"parsing passed\n");
+    fprintf(stdout, "parsing passed\n");
     return 0;
 }

@@ -50,3 +50,13 @@ type LockedFile interface {
 	Locker
 	File        // illegal: Lock, Unlock not unique
 	Lock()      }
+
+        type SymID struct {
+	    Name string
+	    Version int64
+}
+
+func (s SymID) String() string {
+}
+func (s *SymID) String() string {
+}
