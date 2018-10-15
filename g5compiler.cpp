@@ -1123,7 +1123,7 @@ const AstNode* parse(const string & filename) {
             t = next(f);
             node = dynamic_cast<AstType*>(parseType(t));
             expect(OP_RPAREN, "the parenthesis () must match in type declaration");
-   
+        }
         return node;
     };
     parseTypeName = [&](Token&t)->AstNode* {
@@ -1220,7 +1220,7 @@ const AstNode* parse(const string & filename) {
                 node->fields.push_back(make_tuple(fd,tag));
                 if (t.type == OP_SEMI) {
                     t = next(f);
-                }            
+                }
             } while (t.type != OP_RBRACE);
             eat(OP_RBRACE, "expect }");
             eat(OP_SEMI, "expect ;");
@@ -1268,25 +1268,25 @@ const AstNode* parse(const string & filename) {
                 }
             } while (t.type != OP_RPAREN);
             t = next(f);
-            int shouldHaveName;
+          
+            int rewriteStart = 0;
             for (int i = 0; i < node->parameterList.size(); i++) {
-                if (node->parameterList[i].hasName == true) {
-                    bool rewriteBefore = true;
-                    for (int k = 0; k < i; k++) {
-                        if (node->parameterList[k] != false) {
-                            rewriteBefore = false;
+                if (dynamic_cast<AstParameterDecl*>(node->parameterList[i])->hasName == true) {
+                    int k = i;
+                    while (k >= 0) {
+                        if (dynamic_cast<AstParameterDecl*>(node->parameterList[k])->hasName == true && k != i) {
                             break;
                         }
+                        k--;
                     }
-                    if (rewriteBefore == true) {
-                        for (int k = 0; k < i; k++) {
-                            string name = dynamic_cast<AstTypeName*>(
-                                dynamic_cast<AstType*>(node->parameterList[k].type)->at.typeName)->typeName;
-                            node->parameterList[k].type = node.parameterList[i].type;
-                            node->parameterList[k].name = name;
-                            node->parameterList[k].hasName = true; //It's not necessary
-                        }
-                    }
+                    k++;
+                    for (; k < i; k++) {
+                        string name = dynamic_cast<AstTypeName*>(
+                            dynamic_cast<AstType*>(dynamic_cast<AstParameterDecl*>(node->parameterList[k])->type)->at.typeName)->typeName;
+                        dynamic_cast<AstParameterDecl*>(node->parameterList[k])->type = dynamic_cast<AstParameterDecl*>(node->parameterList[i])->type;
+                        dynamic_cast<AstParameterDecl*>(node->parameterList[k])->name = name;
+                        dynamic_cast<AstParameterDecl*>(node->parameterList[k])->hasName = true; //It's not necessary
+                    }   
                 }
             }
         }
@@ -1295,20 +1295,21 @@ const AstNode* parse(const string & filename) {
     parseParameterDecl = [&](Token&t)->AstNode* {
         AstParameterDecl* node = nullptr;
         if (t.type == OP_VARIADIC) {
+            node = new AstParameterDecl;
             node->isVariadic = true;
             t = next(f);
             node->type = parseType(t);
         }
-        else {
+        else if (t.type != OP_RPAREN) {
+            node = new AstParameterDecl;
             auto*mayIdentOrType = parseType(t);
-            if (t.type != OP_COMMA) {
+            if (t.type != OP_COMMA && t.type != OP_RPAREN) {
                 node->hasName = true;
                 if (t.type == OP_VARIADIC) {
                     node->isVariadic = true;
                     t = next(f);
                 }
-                node->name = dynamic_cast<AstTypeName*>(
-                    dynamic_cast<AstType*>(mayIdentOrType)->at.typeName)->typeName;
+                node->name = dynamic_cast<AstTypeName*>(dynamic_cast<AstType*>(mayIdentOrType)->at.typeName)->typeName;
                 node->type = parseType(t);
             }
             else {
@@ -1332,12 +1333,12 @@ const AstNode* parse(const string & filename) {
     parseInterfaceType = [&](Token&t)->AstNode* {
         AstInterfaceType* node = nullptr;
         if (t.type == KW_interface) {
+            node = new AstInterfaceType;
             t = next(f);
             if (t.type == OP_LBRACE) {
                 t = next(f);
                 do {
                     if (auto*tmp = parseMethodSpec(t); tmp != nullptr) {
-                        node = new AstInterfaceType;
                         node->methodSpec.push_back(tmp);
                         if (t.type == OP_SEMI) {
                             t = next(f);
@@ -1718,7 +1719,6 @@ const AstNode* parse(const string & filename) {
                     node->conditionExpr = tmp1;
                     t = next(f);
                 }
-               
             }
             expect(OP_LBRACE, "expect left brace around case clauses");
             do {
@@ -1854,7 +1854,6 @@ const AstNode* parse(const string & filename) {
             expect(OP_SHORTAGN, "expect :=");
             t = next(f);
         }
-        
         if (t.type == KW_range) {
             if(node==nullptr){
                 node = new AstRangeClause;
@@ -1957,7 +1956,7 @@ const AstNode* parse(const string & filename) {
         AstExpression* node = nullptr;
         if (auto*tmp = parseUnaryExpr(t); tmp != nullptr) {
             node = new  AstExpression;
-            node->ae.unaryExpr = tmp; 
+            node->ae.unaryExpr = tmp;
             if (t.type == OP_OR || t.type == OP_AND || t.type == OP_EQ ||
                 t.type == OP_NE || t.type == OP_LT || t.type == OP_LE ||
                 t.type == OP_GT || t.type == OP_GE || t.type == OP_ADD ||
@@ -1965,7 +1964,7 @@ const AstNode* parse(const string & filename) {
                 t.type == OP_MUL || t.type == OP_DIV || t.type == OP_MOD ||
                 t.type == OP_LSHIFT || t.type == OP_RSHIFT || t.type == OP_BITAND ||
                 t.type == OP_XOR) {
-                node->ae.named.binaryOp = t.type;                
+                node->ae.named.binaryOp = t.type;
                 node->ae.named.lhs = tmp;
                 t = next(f);
                 node->ae.named.rhs = parseExpression(t);
@@ -2240,7 +2239,6 @@ const AstNode* parse(const string & filename) {
                 }
             }
         }
-        
         return node;
     };
     parseKey = [&](Token&t)->AstNode* {

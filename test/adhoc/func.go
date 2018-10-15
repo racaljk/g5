@@ -1,12 +1,13 @@
 package main 
 
-func g(int, int, float64) (float64, *[]int)
+func f(a, b int, z float64, opt ...interface{}) (success bool)
+
 func a()(a,b,c float32,d... float32,...e)
+func g(int, int, float64) (float64, *[]int)
 func b(x int) int
 func c(a, _ int, z float32) bool
 func d(a, b int, z float32) (bool)
 func e(prefix string, values ...int)
-func f(a, b int, z float64, opt ...interface{}) (success bool)
 
 func h(n int) func(p *T)
 
