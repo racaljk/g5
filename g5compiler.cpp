@@ -77,18 +77,6 @@ struct AstType ASTNODE {
     }at;
 };
 struct AstTypeName ASTNODE { string typeName; };
-struct AstTypeLit ASTNODE {
-    union {
-        AstNode* arrayType;
-        AstNode* structType;
-        AstNode* pointerType;
-        AstNode* functionType;
-        AstNode* interfaceType;
-        AstNode* sliceType;
-        AstNode* mapType;
-        AstNode* channelType;
-    }atl;
-};
 struct AstArrayType ASTNODE {
     AstNode* length;
     AstNode* elementType;
@@ -919,7 +907,7 @@ const AstNode* parse(const string & filename) {
 
     function<AstNode*(Token&)> parseImportDecl, parseTopLevelDecl, parseTypeAssertion,
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
-        parseTypeLit, parseArrayType, parseStructType, parsePointerType, parseFunctionType,
+        parseArrayType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
         parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType,
         parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec, parseFunctionDecl,
@@ -969,7 +957,9 @@ const AstNode* parse(const string & filename) {
             t = next(f);
             while (t.type == KW_import) {
                 node->importDecl.push_back(parseImportDecl(t));
-                expect(OP_SEMI, "expect semicolon after import declaration");
+                if (t.type == OP_SEMI) {
+                    t = next(f);
+                }
                 t = next(f);
             }
             while (t.type != TK_EOF) {
@@ -1105,7 +1095,35 @@ const AstNode* parse(const string & filename) {
             node = new AstType;
             node->at.typeName = tmp;
         }
-        else  if (auto*tmp = parseTypeLit(t); tmp != nullptr) {
+        if (auto*tmp = parseArrayType(t); tmp != nullptr) {
+            node = new AstType;
+            node->at.typeLit = tmp;
+        }
+        else  if (auto*tmp = parseStructType(t); tmp != nullptr) {
+            node = new AstType;
+            node->at.typeLit = tmp;
+        }
+        else  if (auto*tmp = parsePointerType(t); tmp != nullptr) {
+            node = new AstType;
+            node->at.typeLit = tmp;
+        }
+        else  if (auto*tmp = parseFunctionType(t); tmp != nullptr) {
+            node = new AstType;
+            node->at.typeLit = tmp;
+        }
+        else  if (auto*tmp = parseInterfaceType(t); tmp != nullptr) {
+            node = new AstType;
+            node->at.typeLit = tmp;
+        }
+        else  if (auto*tmp = parseSliceType(t); tmp != nullptr) {
+            node = new AstType;
+            node->at.typeLit = tmp;
+        }
+        else  if (auto*tmp = parseMapType(t); tmp != nullptr) {
+            node = new AstType;
+            node->at.typeLit = tmp;
+        }
+        else  if (auto*tmp = parseChannelType(t); tmp != nullptr) {
             node = new AstType;
             node->at.typeLit = tmp;
         }
@@ -1130,42 +1148,6 @@ const AstNode* parse(const string & filename) {
             }
             node->typeName = typeName;
 
-        }
-        return node;
-    };
-    parseTypeLit = [&](Token&t)->AstNode* {
-        AstTypeLit * node = nullptr;
-        if (auto*tmp = parseArrayType(t); tmp != nullptr) {
-            node = new AstTypeLit;
-            node->atl.arrayType = tmp;
-        }
-        else  if (auto*tmp = parseStructType(t); tmp != nullptr) {
-            node = new AstTypeLit;
-            node->atl.structType = tmp;
-        }
-        else  if (auto*tmp = parsePointerType(t); tmp != nullptr) {
-            node = new AstTypeLit;
-            node->atl.pointerType = tmp;
-        }
-        else  if (auto*tmp = parseFunctionType(t); tmp != nullptr) {
-            node = new AstTypeLit;
-            node->atl.functionType = tmp;
-        }
-        else  if (auto*tmp = parseInterfaceType(t); tmp != nullptr) {
-            node = new AstTypeLit;
-            node->atl.interfaceType = tmp;
-        }
-        else  if (auto*tmp = parseSliceType(t); tmp != nullptr) {
-            node = new AstTypeLit;
-            node->atl.sliceType = tmp;
-        }
-        else  if (auto*tmp = parseMapType(t); tmp != nullptr) {
-            node = new AstTypeLit;
-            node->atl.mapType = tmp;
-        }
-        else  if (auto*tmp = parseChannelType(t); tmp != nullptr) {
-            node = new AstTypeLit;
-            node->atl.channelType = tmp;
         }
         return node;
     };
