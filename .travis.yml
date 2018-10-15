@@ -1,19 +1,24 @@
+dis: trusty
+sudo: required
 language: cpp
+compiler: gcc
 
-matrix:
-  include:
-    - os: linux
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-7
-      env:
-        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - gcc-7
+      - g++-7
+      - cmake
 
 script:
+  - ln -s /usr/bin/gcc-7 /usr/local/bin/gcc
+  - ln -s /usr/bin/g++-7 /usr/local/bin/g++
+  - export CC=/usr/bin/gcc-7
+  - export CXX=/usr/bin/g++-7
   - mkdir build
   - cd build
   - cmake ..
   - make -j8
+
