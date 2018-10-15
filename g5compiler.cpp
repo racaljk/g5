@@ -158,10 +158,10 @@ struct AstVarSpec ASTNODE {
 };
 struct AstFunctionDecl ASTNODE {
     string funcName;
+    AstNode* receiver;
     AstNode* signature;
     AstNode* functionBody;
 };
-struct AstFunctionBody ASTNODE { AstNode* block; };
 struct AstBlock ASTNODE { AstNode* statementList; };
 struct AstStatementList ASTNODE { vector<AstNode*> statements; };
 struct AstStatement ASTNODE {
@@ -283,12 +283,6 @@ struct AstAssignment ASTNODE {
 struct AstShortVarDecl ASTNODE {
     AstNode* lhs;
     AstNode* rhs;
-};
-struct AstMethodDecl ASTNODE {
-    AstNode* receiver;
-    string methodName;
-    AstNode* signature;
-    AstNode* functionBody;
 };
 struct AstExpression ASTNODE {
     union {
@@ -929,17 +923,17 @@ const AstNode* parse(const string & filename) {
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
         parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType,
         parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec, parseFunctionDecl,
-        parseFunctionBody, parseStatementList, parseStatement, parseCompositeLit,
+        parseStatementList, parseStatement, parseCompositeLit, parseFieldName, parseConversion, 
         parseLabeledStmt, parseSimpleStmt, parseGoStmt, parseReturnStmt, parseBreakStmt,
         parseContinueStmt, parseGotoStmt, parseFallthroughStmt, parseBlock, parseIfStmt,
         parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExpressionStmt,
         parseSendStmt, parseIncDecStmt, parseAssignment, parseShortVarDecl, parseExprCaseClause,
         parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
-        parseRangeClause, parseSourceFile, parseMethodDecl, parseExpressionList, parseExpression,
+        parseRangeClause, parseSourceFile, parseExpressionList, parseExpression,
         parseUnaryExpr, parsePrimaryExpr, parseSelector, parseIndex, parseSlice,
         parseArgument, parseOperand, parseOperandName, parseLiteral, parseBasicLit, 
         parseLiteralValue, parseElementList, parseKeyedElement, parseKey, parseElement, 
-        parseFunctionLit, parseConversion, parseMethodExpr, parseFieldName;
+        parseFunctionLit,parseMethodExpr;
 
     parseIdentifierList = [&](Token&t)->AstNode* {
         AstIdentifierList* node = nullptr;
@@ -1034,10 +1028,6 @@ const AstNode* parse(const string & filename) {
         else if (auto* tmp = parseFunctionDecl(t); tmp != nullptr) {
             node = new AstTopLevelDecl;
             node->atld.functionDecl = tmp;
-        }
-        else if (auto* tmp = parseMethodDecl(t); tmp != nullptr) {
-            node = new AstTopLevelDecl;
-            node->atld.methodDecl = tmp;
         }
         return node;
     };
@@ -1482,18 +1472,14 @@ const AstNode* parse(const string & filename) {
         AstFunctionDecl * node = nullptr;
         if (t.type == KW_func) {
             node = new AstFunctionDecl;
-            node->funcName = expect(TK_ID, "function should have a name if it's not an anonymous function").lexeme;
+            t = next(f);
+            if (t.type == OP_LPAREN) {
+                node->receiver = parseParameter(t);
+            }
+            node->funcName = t.lexeme;
             t = next(f);
             node->signature = parseSignature(t);
-            node->functionBody = parseFunctionBody(t);
-        }
-        return node;
-    };
-    parseFunctionBody = [&](Token&t)->AstNode* {
-        AstFunctionBody * node = nullptr;
-        if (auto* tmp = parseBlock(t);tmp!=nullptr) {
-            node = new AstFunctionBody;
-            node->block = parseBlock(t);
+            node->functionBody = parseBlock(t);
         }
         return node;
     };
@@ -1501,8 +1487,13 @@ const AstNode* parse(const string & filename) {
         AstBlock * node = nullptr;
         if (t.type==OP_LBRACE) {
             node = new AstBlock;
-            node->statementList = parseStatementList(t);
-            expect(OP_RBRACE, "block should end with right brace \"}\"");
+            t = next(f);
+            if (t.type != OP_RBRACE) {
+                node->statementList = parseStatementList(t);
+            }
+            else {
+                t = next(f);
+            }
         }
         return node;
     };
@@ -1595,10 +1586,6 @@ const AstNode* parse(const string & filename) {
     };
     parseSimpleStmt = [&](Token&t)->AstNode* {
         AstSimpleStmt * node = nullptr;
-        //if(auto* tmp = parseEmptyStmt(t); tmp!=nullptr){
-        //    node = new AstEmptyStmt;
-        //    node->ass.EmptyStmt = tmp;
-       // }
         if(auto* tmp = parseExpressionStmt(t); tmp!=nullptr){
             node = new AstSimpleStmt;
             node->ass.expressionStmt = tmp;
@@ -1933,17 +1920,7 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parseMethodDecl = [&](Token&t)->AstNode* {
-        AstMethodDecl* node = nullptr;
-        if (t.type == KW_func) {
-            node = new AstMethodDecl;
-            node->receiver = parseParameter(t);
-            node->methodName = expect(TK_ID, "a method declaration must contain a name").lexeme;
-            node->signature = parseSignature(t);
-            node->functionBody = parseFunctionBody(t);
-        }
-        return node;
-    };
+
     parseExpression = [&](Token&t)->AstNode* {
         AstExpression* node = nullptr;
         if (auto*tmp = parseUnaryExpr(t); tmp != nullptr) {
@@ -2277,7 +2254,7 @@ const AstNode* parse(const string & filename) {
             t = next(f);
             node->signature = parseSignature(t);
             t = next(f);
-            node->functionBody = parseFunctionBody(t);
+            node->functionBody = parseBlock(t);
         }
         return node;
     };
