@@ -433,7 +433,7 @@ static struct goruntime {
 } grt;
 
 //===----------------------------------------------------------------------===//
-// Give me 5, I'll give you a minimal but complete golang impl back.
+// Implementation of golang compiler and runtime within 5 functions
 //===----------------------------------------------------------------------===//
 
 Token next(fstream& f) {
@@ -1269,24 +1269,16 @@ const AstNode* parse(const string & filename) {
             } while (t.type != OP_RPAREN);
             t = next(f);
           
-            int rewriteStart = 0;
-            for (int i = 0; i < node->parameterList.size(); i++) {
+            for (int i = 0, rewriteStart=0; i < node->parameterList.size(); i++) {
                 if (dynamic_cast<AstParameterDecl*>(node->parameterList[i])->hasName == true) {
-                    int k = i;
-                    while (k >= 0) {
-                        if (dynamic_cast<AstParameterDecl*>(node->parameterList[k])->hasName == true && k != i) {
-                            break;
-                        }
-                        k--;
-                    }
-                    k++;
-                    for (; k < i; k++) {
+                    for (int k = rewriteStart; k < i; k++) {
                         string name = dynamic_cast<AstTypeName*>(
                             dynamic_cast<AstType*>(dynamic_cast<AstParameterDecl*>(node->parameterList[k])->type)->at.typeName)->typeName;
                         dynamic_cast<AstParameterDecl*>(node->parameterList[k])->type = dynamic_cast<AstParameterDecl*>(node->parameterList[i])->type;
                         dynamic_cast<AstParameterDecl*>(node->parameterList[k])->name = name;
                         dynamic_cast<AstParameterDecl*>(node->parameterList[k])->hasName = true; //It's not necessary
                     }   
+                    rewriteStart = i + 1;
                 }
             }
         }
@@ -2339,7 +2331,6 @@ void printLex(const string & filename) {
 }
 
 int main(int argc, char *argv[]){
-    //const string filename = "C:\\Users\\Cthulhu\\Desktop\\g5\\test\\adhoc\\vardecl.go";
     //printLex(filename);
     if (argc < 2) {
         fprintf(stderr, "specify your go source file\n");
