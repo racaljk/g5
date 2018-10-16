@@ -917,26 +917,25 @@ const AstNode* parse(const string & filename) {
 #pragma endregion
 #pragma region Declaration
     auto parseSourceFile = [&](Token&t)->AstNode* {
-        AstSourceFile * node = nullptr;
-        if (t.type == KW_package) {
-            grt.package = expect(TK_ID, "expect identifier").lexeme;
-            node = new AstSourceFile;
-            expect(OP_SEMI, "expect a semicolon after package declaration");
-            t = next(f);
-            while (t.type != TK_EOF) {
-                switch (t.type) {
-                case KW_import:node->importDecl.push_back(parseImportDecl(t)); break;
-                case KW_const:node->constDecl.push_back(parseConstDecl(t)); break;
-                case KW_type:node->typeDecl.push_back(parseTypeDecl(t)); break;
-                case KW_var:node->varDecl.push_back(parseVarDecl(t)); break;
-                case KW_func:node->funcDecl.push_back(parseFunctionDecl(t)); break;
-                default:break;
-                }
-                if (t.type == OP_SEMI) {
-                    t = next(f);
-                }
+        AstSourceFile * node = new AstSourceFile;
+        eat(KW_package, "a go source file must start with package declaration");
+        grt.package = t.lexeme;
+        eat(TK_ID, "name required at the package declaration");
+        eat(OP_SEMI, "expect ; at the end of package declaration");
+        while (t.type != TK_EOF) {
+            switch (t.type) {
+            case KW_import:node->importDecl.push_back(parseImportDecl(t)); break;
+            case KW_const:node->constDecl.push_back(parseConstDecl(t)); break;
+            case KW_type:node->typeDecl.push_back(parseTypeDecl(t)); break;
+            case KW_var:node->varDecl.push_back(parseVarDecl(t)); break;
+            case KW_func:node->funcDecl.push_back(parseFunctionDecl(t)); break;
+            default:break;
+            }
+            if (t.type == OP_SEMI) {
+                t = next(f);
             }
         }
+        
 
         return node;
     };
@@ -1377,7 +1376,6 @@ const AstNode* parse(const string & filename) {
 #pragma region Statement
     parseStatement = [&](Token&t)->AstNode* {
         AstStatement * node = nullptr;
-
         switch (t.type) {
         case KW_type: node = new AstStatement; node->stmt = parseTypeDecl(t); break;
         case KW_const: node = new AstStatement; node->stmt = parseConstDecl(t); break;
@@ -1396,12 +1394,15 @@ const AstNode* parse(const string & filename) {
         case KW_defer: node = new AstStatement; node->stmt = parseDeferStmt(t); break;
         case OP_LBRACE: node = new AstStatement;  node->stmt = parseBlock(t); break;
         case OP_SEMI: break;//empty statement
-        default:
+        case TK_ID: {
+            auto* exprList = parseExpressionList(t);
             if (auto*tmp = parseSimpleStmt(t); tmp != nullptr) {
                 node = new AstStatement;
                 node->stmt = tmp;
             }
             break;
+        }
+        default:break;
         }
         return node;
     };
@@ -1432,25 +1433,33 @@ const AstNode* parse(const string & filename) {
     };
     parseSimpleStmt = [&](Token&t)->AstNode* {
         AstSimpleStmt * node = nullptr;
-        if (auto* tmp = parseExpressionStmt(t); tmp != nullptr) {
-            node = new AstSimpleStmt;
-            node->ass.expressionStmt = tmp;
+        auto*tmp = parseExpressionList(t);
+        if (auto*tmp = parseExpressionList(t); tmp != nullptr) {
+
         }
-        else if (auto* tmp = parseSendStmt(t); tmp != nullptr) {
-            node = new AstSimpleStmt;
-            node->ass.sendStmt = tmp;
+        switch (t.type) {
+        case OP_CHAN: {
+            
+            break;
         }
-        else if (auto* tmp = parseIncDecStmt(t); tmp != nullptr) {
-            node = new AstSimpleStmt;
-            node->ass.incDecStmt = tmp;
+        case OP_INC: {
+            break;
         }
-        else if (auto* tmp = parseAssignment(t); tmp != nullptr) {
-            node = new AstSimpleStmt;
-            node->ass.assignment = tmp;
+        case OP_DEC: {
+            break; 
         }
-        else if (auto* tmp = parseShortVarDecl(t); tmp != nullptr) {
-            node = new AstSimpleStmt;
-            node->ass.shortVarDecl = tmp;
+        case OP_COLON: {
+            break;
+        }
+        case OP_SHORTAGN: {
+            break;
+        }
+        case OP_AGN: {
+            break;
+        }
+        default: {
+            break;
+        }
         }
         return node;
     };
@@ -1771,8 +1780,8 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-
-    // Expression
+#pragma endregion
+#pragma region Expression
     parseExpression = [&](Token&t)->AstNode* {
         AstExpression* node = nullptr;
         if (auto*tmp = parseUnaryExpr(t); tmp != nullptr) {
@@ -1808,7 +1817,6 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-
     parsePrimaryExpr = [&](Token&t)->AstNode* {
         AstPrimaryExpr*node = nullptr;
         if (auto*tmp = parseOperand(t); tmp != nullptr) {
@@ -1966,7 +1974,6 @@ const AstNode* parse(const string & filename) {
     };
     parseCompositeLit = [&](Token&t)->AstNode* {
         AstCompositeLit* node = nullptr;
-
         switch (t.type) {
         case KW_struct: node = new AstCompositeLit; node->literalType = parseStructType(t); node->literalValue = parseLiteralValue(t); break;
         case KW_map: node = new AstCompositeLit; node->literalType = parseMapType(t); node->literalValue = parseLiteralValue(t); break;
