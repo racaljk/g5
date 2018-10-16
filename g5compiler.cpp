@@ -103,6 +103,7 @@ struct AstTypeName ASTNODE { string typeName; };
 struct AstArrayType ASTNODE {
     AstNode* length{};
     AstNode* elementType{};
+    bool automaticLen;
 };
 struct AstStructType ASTNODE {
     union _FieldDecl {
@@ -326,20 +327,7 @@ struct AstLiteral ASTNODE {
 };
 struct AstBasicLit ASTNODE { TokenType type; string value; };
 struct AstCompositeLit ASTNODE {
-    union {
-        AstNode* structType;
-        struct {
-            AstNode* elementType;
-            bool automaticLength;
-        }automaticLengthArrayType;
-        struct {
-            AstNode* arrayLength;
-            AstNode* elementType;
-        }arrayType;
-        AstNode* sliceType;
-        AstNode* mapType;
-        AstNode* typeName;
-    }acl{};
+    AstNode*literalType{};
     AstNode*literalValue{};
 };
 struct AstLiteralValue ASTNODE { vector< AstNode*> keyedElement; };
@@ -875,7 +863,7 @@ const AstNode* parse(const string & filename) {
         parseDeclaration, parseConstDecl, parseIdentifierList, parseType, parseTypeName,
         parseArrayOrSliceType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
-        parseMethodSpec, parseMethodName, parseSliceType, parseMapType, parseChannelType,
+        parseMethodSpec, parseMethodName, parseMapType, parseChannelType,parseFunctionLit,
         parseTypeDecl, parseTypeSpec, parseVarDecl, parseVarSpec, parseFunctionDecl,
         parseStatementList, parseStatement, parseCompositeLit, parseFieldName, parseBasicLit,
         parseLabeledStmt, parseSimpleStmt, parseGoStmt, parseReturnStmt, parseBreakStmt,
@@ -885,8 +873,7 @@ const AstNode* parse(const string & filename) {
         parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
         parseRangeClause, parseSourceFile, parseExpressionList, parseExpression,
         parseUnaryExpr, parsePrimaryExpr, parseOperand, parseOperandName, parseLiteral, 
-        parseLiteralValue, parseElementList, parseKeyedElement, parseKey, parseElement,
-        parseFunctionLit;
+        parseLiteralValue, parseElementList, parseKeyedElement, parseKey, parseElement;
 
     // List parsing
     parseIdentifierList = [&](Token&t)->AstNode* {
@@ -1385,15 +1372,6 @@ const AstNode* parse(const string & filename) {
             node = new AstMethodName;
             node->methodName = t.lexeme;
             t = next(f);
-        }
-        return node;
-    };
-    parseSliceType = [&](Token&t)->AstNode* {
-        AstSliceType* node = nullptr;
-        if (t.type == OP_LBRACKET) {
-            node = new AstSliceType;
-            expect(OP_RBRACKET, "bracket [] must match in slice type declaration");
-            node->elementType = parseType(t);
         }
         return node;
     };
@@ -2024,46 +2002,43 @@ const AstNode* parse(const string & filename) {
     };
     parseCompositeLit = [&](Token&t)->AstNode* {
         AstCompositeLit* node = nullptr;
-        if (auto*tmp = parseStructType(t); tmp != nullptr) {
-            node = new AstCompositeLit;
-            node->acl.structType = tmp;
-            node->literalValue = parseLiteralValue(t);
-        }
-        else if (t.type == OP_LBRACKET) {
-            node = new AstCompositeLit;
+
+        switch (t.type) {
+        case KW_struct: node = new AstCompositeLit; node->literalType = parseStructType(t); node->literalValue = parseLiteralValue(t); break;
+        case KW_map: node = new AstCompositeLit; node->literalType = parseMapType(t); node->literalValue = parseLiteralValue(t); break;
+        case TK_ID: node = new AstCompositeLit; node->literalType = parseTypeName(t); node->literalValue = parseLiteralValue(t); break;
+        case OP_LBRACKET: {//slice or array 
             t = next(f);
+            AstNode* tmp = nullptr;
             if (t.type == OP_VARIADIC) {
-                node->acl.automaticLengthArrayType.automaticLength = true;
+                tmp = new AstArrayType;
+                dynamic_cast<AstArrayType*>(tmp)->automaticLen = true;
                 expect(OP_RBRACKET, "expect ]");
                 t = next(f);
-                node->acl.automaticLengthArrayType.elementType = parseType(t);
+                dynamic_cast<AstArrayType*>(tmp)->elementType = parseType(t);
             }
             else {
                 if (t.type != OP_RBRACKET) {
-                    node->acl.arrayType.arrayLength = parseExpression(t);
+                    tmp = new AstArrayType;
+                    dynamic_cast<AstArrayType*>(tmp)->length = parseExpression(t);
+                    dynamic_cast<AstArrayType*>(tmp)->elementType = parseType(t);
                 }
                 else {
                     t = next(f);
+                    tmp = new AstSliceType;
+                    dynamic_cast<AstSliceType*>(tmp)->elementType = parseType(t);
                 }
-                node->acl.arrayType.elementType = parseType(t);
+
             }
-            node->literalValue = parseLiteralValue(t);
-        }
-        else if (auto*tmp = parseSliceType(t); tmp != nullptr) {
             node = new AstCompositeLit;
-            node->acl.sliceType = tmp;
+            node->literalType = tmp;
             node->literalValue = parseLiteralValue(t);
+            break;
         }
-        else if (auto*tmp = parseMapType(t); tmp != nullptr) {
-            node = new AstCompositeLit;
-            node->acl.mapType = tmp;
-            node->literalValue = parseLiteralValue(t);
+        default:break;
         }
-        else if (auto*tmp = parseTypeName(t); tmp != nullptr) {
-            node = new AstCompositeLit;
-            node->acl.typeName = tmp;
-            node->literalValue = parseLiteralValue(t);
-        }
+       
+        
         return node;
     };
     parseLiteralValue = [&](Token&t)->AstNode* {
