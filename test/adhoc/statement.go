@@ -10,6 +10,51 @@ import (
 	"strings"
 )
 
+func simplestmt(){
+    //expr stmt
+    h(x+y)
+    f.Close()
+    <-ch
+    (<-ch)
+    // send stmt
+    ch <- 3 
+    //incdec stmt
+    p++
+    k--
+    //assign stmt
+    x = 1
+    *p = f()
+    a[i] = 23
+    (k) = <-ch  
+    a[i] <<= 2
+    i &^= 1<<n
+    x, y = f()
+    //short assign stmt
+    i, j := 0, 10
+    f := func() int { return 7 }
+    ch := make(chan int)
+    r, w := os.Pipe(fd)  // os.Pipe() returns two values
+    _, y, _ := coord(p)  
+    field1, offset := nextField(str, 0)
+    field2, offset := nextField(str, offset)  // redeclares offset
+    a, a := 1, 2                              // illegal: double declaration of a or no new variable if a was declared elsewhere
+}
+
+func typeChecking(p interface{}) {
+	switch q :=p.(type) {
+	case int:
+		fmt.Print("int")
+	case float64:
+		fmt.Print(q)
+		fmt.Printf("float64")
+	}
+}
+
+func typeAssertion(p interface{}){
+	q:=p.(int)
+	fmt.Print(q)
+}
+
 func div(a,b float64) (float64, error){
 	if b==0{
 		return 0,errors.New("should not divide by zero")
@@ -160,4 +205,4 @@ func task(startID int){
 	for i:=0;i<5;i++{
 		fmt.Println("goroutine:",startID,"- number:",i)
 	}
-}QA
+}

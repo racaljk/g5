@@ -11,8 +11,7 @@ const (
 	String
 	RawString
 	Comment
-	skipComment
-)
+	skipComment)
 
 const k = 5
 
