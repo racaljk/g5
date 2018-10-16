@@ -853,23 +853,23 @@ const AstNode* parse(const string & filename) {
     function<AstImportDecl*(Token&)> parseImportDecl;
 
     function<AstNode*(Token&)> parseTypeAssertion,
-        parseIdentifierList, parseType, parseTypeName,
+        parseType, parseTypeName,
         parseArrayOrSliceType, parseStructType, parsePointerType, parseFunctionType,
         parseSignature, parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
         parseMethodSpec, parseMethodName, parseMapType, parseChannelType,parseFunctionLit,
         parseTypeSpec,parseVarSpec,
-        parseStatementList, parseStatement, parseCompositeLit, parseFieldName, parseBasicLit,
+        parseStatement, parseCompositeLit, parseFieldName, parseBasicLit,
         parseLabeledStmt, parseSimpleStmt, parseGoStmt, parseReturnStmt, parseBreakStmt,
         parseContinueStmt, parseGotoStmt, parseFallthroughStmt, parseBlock, parseIfStmt,
         parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExpressionStmt,
         parseSendStmt, parseIncDecStmt, parseAssignment, parseShortVarDecl, parseExprCaseClause,
         parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
-        parseRangeClause, parseSourceFile, parseExpressionList, parseExpression,
+        parseRangeClause, parseExpression,
         parseUnaryExpr, parsePrimaryExpr, parseOperand, parseOperandName, parseLiteral, 
         parseLiteralValue, parseElementList, parseKeyedElement, parseKey, parseElement;
 
-    // List parsing
-    parseIdentifierList = [&](Token&t)->AstNode* {
+#pragma region ListParsing
+    auto parseIdentifierList = [&](Token&t)->AstNode* {
         AstIdentifierList* node = nullptr;
         if (t.type == TK_ID) {
             node = new  AstIdentifierList;
@@ -882,7 +882,7 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parseExpressionList = [&](Token&t)->AstNode* {
+    auto parseExpressionList = [&](Token&t)->AstNode* {
         AstExpressionList* node = nullptr;
         if (auto* tmp = parseExpression(t); tmp != nullptr) {
             node = new  AstExpressionList;
@@ -894,7 +894,7 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parseStatementList = [&](Token&t)->AstNode* {
+    auto parseStatementList = [&](Token&t)->AstNode* {
         AstStatementList * node = nullptr;
         if (auto * tmp = parseStatement(t); tmp != nullptr) {
             node = new AstStatementList;
@@ -914,106 +914,79 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    // Declaration
-    parseSourceFile = [&](Token&t)->AstNode* {
-        AstSourceFile * node = nullptr;
-        if (t.type == KW_package) {
-            grt.package = expect(TK_ID, "expect identifier").lexeme;
-            node = new AstSourceFile;
-            expect(OP_SEMI, "expect a semicolon after package declaration");
-            t = next(f);
-            while (t.type != TK_EOF) {
-                switch (t.type) {
-                case KW_import:node->importDecl.push_back(parseImportDecl(t)); break;
-                case KW_const:node->constDecl.push_back(parseConstDecl(t)); break;
-                case KW_type:node->typeDecl.push_back(parseTypeDecl(t)); break;
-                case KW_var:node->varDecl.push_back(parseVarDecl(t)); break;
-                case KW_func:node->funcDecl.push_back(parseFunctionDecl(t)); break;
-                default:break;
-                }
-                if (t.type == OP_SEMI) {
-                    t = next(f);
-                }
+#pragma endregion
+#pragma region Declaration
+    auto parseSourceFile = [&](Token&t)->AstNode* {
+        AstSourceFile * node = new AstSourceFile;
+        eat(KW_package, "a go source file must start with package declaration");
+        grt.package = t.lexeme;
+        eat(TK_ID, "name required at the package declaration");
+        eat(OP_SEMI, "expect ; at the end of package declaration");
+        while (t.type != TK_EOF) {
+            switch (t.type) {
+            case KW_import:node->importDecl.push_back(parseImportDecl(t)); break;
+            case KW_const:node->constDecl.push_back(parseConstDecl(t)); break;
+            case KW_type:node->typeDecl.push_back(parseTypeDecl(t)); break;
+            case KW_var:node->varDecl.push_back(parseVarDecl(t)); break;
+            case KW_func:node->funcDecl.push_back(parseFunctionDecl(t)); break;
+            default:break;
+            }
+            if (t.type == OP_SEMI) {
+                t = next(f);
             }
         }
+        
 
         return node;
     };
     parseImportDecl = [&](Token&t)->AstImportDecl* {
-        if (t.type == KW_import) {
-            auto node = new AstImportDecl;
+        auto node = new AstImportDecl;
+        eat(KW_import, "it should be import declaration");
+        if (t.type == OP_LPAREN) {
             t = next(f);
-            if (t.type == OP_LPAREN) {
-                t = next(f);
-                do {
-                    string importName, alias;
-                    if (t.type == OP_DOT || t.type == TK_ID) {
-                        alias = t.lexeme;
-                        importName = expect(LITERAL_STR, "import path should not empty").lexeme;
-                    }
-                    else {
-                        importName = t.lexeme;
-                    }
-                    importName = importName.substr(1, importName.length() - 2);
-                    node->imports[importName] = alias;
-                    t = next(f);
-                    if (t.type == OP_SEMI) {
-                        t = next(f);
-                    }
-                } while (t.type != OP_RPAREN);
-                eat(OP_RPAREN, "expect )");
-            }
-            else {
+            do {
                 string importName, alias;
                 if (t.type == OP_DOT || t.type == TK_ID) {
                     alias = t.lexeme;
                     importName = expect(LITERAL_STR, "import path should not empty").lexeme;
-                    t = next(f);
                 }
                 else {
                     importName = t.lexeme;
-                    t = next(f);
                 }
                 importName = importName.substr(1, importName.length() - 2);
                 node->imports[importName] = alias;
-            }
-            return node;
-        }
-        return nullptr;
-    };
-    parseConstDecl = [&](Token&t)->AstConstDecl* {
-        AstConstDecl * node = nullptr;
-        if (t.type == KW_const) {
-            node = new AstConstDecl;
-            t = next(f);
-            if (t.type == OP_LPAREN) {
                 t = next(f);
-                do {
-                    node->identifierList.push_back(parseIdentifierList(t));
-                    if (auto*tmp = parseType(t); tmp != nullptr) {
-                        node->type.push_back(tmp);
-                    }
-                    else {
-                        node->type.push_back(nullptr);
-                    }
-                    if (t.type == OP_AGN) {
-                        t = next(f);
-                        node->expressionList.push_back(parseExpressionList(t));
-                    }
-                    else {
-                        node->expressionList.push_back(nullptr);
-                    }
-                    if (t.type == OP_SEMI) {
-                        t = next(f);
-                    }
-                } while (t.type != OP_RPAREN);
-                eat(OP_RPAREN, "eat right parenthesis");
+                if (t.type == OP_SEMI) {
+                    t = next(f);
+                }
+            } while (t.type != OP_RPAREN);
+            eat(OP_RPAREN, "expect )");
+        }
+        else {
+            string importName, alias;
+            if (t.type == OP_DOT || t.type == TK_ID) {
+                alias = t.lexeme;
+                importName = expect(LITERAL_STR, "import path should not empty").lexeme;
+                t = next(f);
             }
             else {
+                importName = t.lexeme;
+                t = next(f);
+            }
+            importName = importName.substr(1, importName.length() - 2);
+            node->imports[importName] = alias;
+        }
+        return node;
+    };
+    parseConstDecl = [&](Token&t)->AstConstDecl* {
+        AstConstDecl * node = new AstConstDecl;
+        eat(KW_const, "it should be const declaration");
+        if (t.type == OP_LPAREN) {
+            t = next(f);
+            do {
                 node->identifierList.push_back(parseIdentifierList(t));
                 if (auto*tmp = parseType(t); tmp != nullptr) {
                     node->type.push_back(tmp);
-                    t = next(f);
                 }
                 else {
                     node->type.push_back(nullptr);
@@ -1025,33 +998,51 @@ const AstNode* parse(const string & filename) {
                 else {
                     node->expressionList.push_back(nullptr);
                 }
-                if (t.type != OP_SEMI) {
-
-                    throw runtime_error("expect an explicit semicolon");
+                if (t.type == OP_SEMI) {
+                    t = next(f);
                 }
+            } while (t.type != OP_RPAREN);
+            eat(OP_RPAREN, "eat right parenthesis");
+        }
+        else {
+            node->identifierList.push_back(parseIdentifierList(t));
+            if (auto*tmp = parseType(t); tmp != nullptr) {
+                node->type.push_back(tmp);
+                t = next(f);
+            }
+            else {
+                node->type.push_back(nullptr);
+            }
+            if (t.type == OP_AGN) {
+                t = next(f);
+                node->expressionList.push_back(parseExpressionList(t));
+            }
+            else {
+                node->expressionList.push_back(nullptr);
+            }
+            if (t.type != OP_SEMI) {
+
+                throw runtime_error("expect an explicit semicolon");
             }
         }
+        
         return node;
     };
     parseTypeDecl = [&](Token&t)->AstTypeDecl* {
-        AstTypeDecl* node = nullptr;
-        if (t.type == KW_type) {
-            node = new AstTypeDecl;
+        AstTypeDecl* node = new AstTypeDecl;
+        eat(KW_type, "it should be type declaration");
+        if (t.type == OP_LPAREN) {
             t = next(f);
-            if (t.type == OP_LPAREN) {
-                t = next(f);
-                do {
-                    node->typeSpec.push_back(parseTypeSpec(t));
-                    if (t.type == OP_SEMI) {
-                        t = next(f);
-                    }
-                } while (t.type != OP_RPAREN);
-                eat(OP_RPAREN, "expect )");
-            }
-            else {
+            do {
                 node->typeSpec.push_back(parseTypeSpec(t));
-            }
-            
+                if (t.type == OP_SEMI) {
+                    t = next(f);
+                }
+            } while (t.type != OP_RPAREN);
+            eat(OP_RPAREN, "expect )");
+        }
+        else {
+            node->typeSpec.push_back(parseTypeSpec(t));
         }
         return node;
     };
@@ -1069,21 +1060,19 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseVarDecl = [&](Token&t)->AstVarDecl* {
-        AstVarDecl* node = nullptr;
-        if (t.type == KW_var) {
-            node = new AstVarDecl;
-            t = next(f);
-            if (t.type == OP_LPAREN) {
-                do {
-                    node->varSpec.push_back(parseVarSpec(t));
-                    expect(OP_SEMI, "expect a semicolon after each var specification");
-                } while (t.type != OP_RPAREN);
-                eat(OP_RPAREN, "expect )");
-            }
-            else {
+        AstVarDecl* node = new AstVarDecl;
+        eat(KW_var, "it should be var declaration");
+        if (t.type == OP_LPAREN) {
+            do {
                 node->varSpec.push_back(parseVarSpec(t));
-            }
+                expect(OP_SEMI, "expect a semicolon after each var specification");
+            } while (t.type != OP_RPAREN);
+            eat(OP_RPAREN, "expect )");
         }
+        else {
+            node->varSpec.push_back(parseVarSpec(t));
+        }
+        
         return node;
     };
     parseVarSpec = [&](Token&t)->AstNode* {
@@ -1107,18 +1096,16 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseFunctionDecl = [&](Token&t)->AstFunctionDecl* {
-        AstFunctionDecl * node = nullptr;
-        if (t.type == KW_func) {
-            node = new AstFunctionDecl;
-            t = next(f);
-            if (t.type == OP_LPAREN) {
-                node->receiver = parseParameter(t);
-            }
-            node->funcName = t.lexeme;
-            t = next(f);
-            node->signature = parseSignature(t);
-            node->functionBody = parseBlock(t);
+        AstFunctionDecl * node = new AstFunctionDecl;
+        eat(KW_func, "it should be func declaration");
+        if (t.type == OP_LPAREN) {
+            node->receiver = parseParameter(t);
         }
+        node->funcName = t.lexeme;
+        t = next(f);
+        node->signature = parseSignature(t);
+        node->functionBody = parseBlock(t);
+        
         return node;
     };
     parseFunctionType = [&](Token&t)->AstNode* {
@@ -1207,8 +1194,8 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    
-    // Type
+#pragma endregion
+#pragma region Type
     parseType = [&](Token&t)->AstNode* {
         AstType * node = nullptr;
         switch (t.type) {
@@ -1385,11 +1372,10 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-
-    // Statement
+#pragma endregion
+#pragma region Statement
     parseStatement = [&](Token&t)->AstNode* {
         AstStatement * node = nullptr;
-
         switch (t.type) {
         case KW_type: node = new AstStatement; node->stmt = parseTypeDecl(t); break;
         case KW_const: node = new AstStatement; node->stmt = parseConstDecl(t); break;
@@ -1408,12 +1394,15 @@ const AstNode* parse(const string & filename) {
         case KW_defer: node = new AstStatement; node->stmt = parseDeferStmt(t); break;
         case OP_LBRACE: node = new AstStatement;  node->stmt = parseBlock(t); break;
         case OP_SEMI: break;//empty statement
-        default:
+        case TK_ID: {
+            auto* exprList = parseExpressionList(t);
             if (auto*tmp = parseSimpleStmt(t); tmp != nullptr) {
                 node = new AstStatement;
                 node->stmt = tmp;
             }
             break;
+        }
+        default:break;
         }
         return node;
     };
@@ -1444,25 +1433,33 @@ const AstNode* parse(const string & filename) {
     };
     parseSimpleStmt = [&](Token&t)->AstNode* {
         AstSimpleStmt * node = nullptr;
-        if (auto* tmp = parseExpressionStmt(t); tmp != nullptr) {
-            node = new AstSimpleStmt;
-            node->ass.expressionStmt = tmp;
+        auto*tmp = parseExpressionList(t);
+        if (auto*tmp = parseExpressionList(t); tmp != nullptr) {
+
         }
-        else if (auto* tmp = parseSendStmt(t); tmp != nullptr) {
-            node = new AstSimpleStmt;
-            node->ass.sendStmt = tmp;
+        switch (t.type) {
+        case OP_CHAN: {
+            
+            break;
         }
-        else if (auto* tmp = parseIncDecStmt(t); tmp != nullptr) {
-            node = new AstSimpleStmt;
-            node->ass.incDecStmt = tmp;
+        case OP_INC: {
+            break;
         }
-        else if (auto* tmp = parseAssignment(t); tmp != nullptr) {
-            node = new AstSimpleStmt;
-            node->ass.assignment = tmp;
+        case OP_DEC: {
+            break; 
         }
-        else if (auto* tmp = parseShortVarDecl(t); tmp != nullptr) {
-            node = new AstSimpleStmt;
-            node->ass.shortVarDecl = tmp;
+        case OP_COLON: {
+            break;
+        }
+        case OP_SHORTAGN: {
+            break;
+        }
+        case OP_AGN: {
+            break;
+        }
+        default: {
+            break;
+        }
         }
         return node;
     };
@@ -1783,8 +1780,8 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-
-    // Expression
+#pragma endregion
+#pragma region Expression
     parseExpression = [&](Token&t)->AstNode* {
         AstExpression* node = nullptr;
         if (auto*tmp = parseUnaryExpr(t); tmp != nullptr) {
@@ -1820,7 +1817,6 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-
     parsePrimaryExpr = [&](Token&t)->AstNode* {
         AstPrimaryExpr*node = nullptr;
         if (auto*tmp = parseOperand(t); tmp != nullptr) {
@@ -1978,7 +1974,6 @@ const AstNode* parse(const string & filename) {
     };
     parseCompositeLit = [&](Token&t)->AstNode* {
         AstCompositeLit* node = nullptr;
-
         switch (t.type) {
         case KW_struct: node = new AstCompositeLit; node->literalType = parseStructType(t); node->literalValue = parseLiteralValue(t); break;
         case KW_map: node = new AstCompositeLit; node->literalType = parseMapType(t); node->literalValue = parseLiteralValue(t); break;
@@ -2096,8 +2091,8 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
+#pragma endregion
     // parsing startup
-
     return parseSourceFile(t);
 }
 
