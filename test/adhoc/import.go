@@ -7,6 +7,8 @@ import (
 import (
 "aaa"
 )
+import (
+"aaa")
 import "bbb"
 import m "math"
 import (

@@ -29,7 +29,7 @@ type	C0 = B0
 )
 
 // A simple File interface
-interface {
+type P interface {
     Dummy(a Buffer, b Buffer, f1,f2,f3 Buffer)
 	Read(b Buffer) bool
 	Write(b Buffer) bool
