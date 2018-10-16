@@ -43,7 +43,7 @@ enum TokenType : signed int {
 };
 //todo: add destructors for these structures
 // List parsing
-struct AstNode { virtual ~AstNode() {} };
+struct AstNode { virtual ~AstNode() = default; };
 struct AstIdentifierList ASTNODE { vector<string> identifierList; };
 struct AstExpressionList ASTNODE { vector<AstNode*> expressionList; };
 struct AstStatementList ASTNODE { vector<AstNode*> statements; };
@@ -76,33 +76,33 @@ struct AstConstDecl ASTNODE {
 struct AstTypeDecl ASTNODE { vector<AstNode*> typeSpec; };
 struct AstTypeSpec ASTNODE {
     string identifier;
-    AstNode* type;
+    AstNode* type{};
 };
 struct AstVarDecl ASTNODE { vector<AstNode*> varSpec; };
 struct AstVarSpec ASTNODE {
-    AstNode* identifierList;
+    AstNode* identifierList{};
     union {
         struct {
             AstNode* type;
             AstNode* expressionList;
         }named;
         AstNode* expressionList;
-    }avs;
+    }avs{};
 };
 struct AstFunctionDecl ASTNODE {
     string funcName;
-    AstNode* receiver;
-    AstNode* signature;
-    AstNode* functionBody;
+    AstNode* receiver{};
+    AstNode* signature{};
+    AstNode* functionBody{};
 };
 // Type
 struct AstType ASTNODE {
-    AstNode* type;
+    AstNode* type{};
 };
 struct AstTypeName ASTNODE { string typeName; };
 struct AstArrayType ASTNODE {
-    AstNode* length;
-    AstNode* elementType;
+    AstNode* length{};
+    AstNode* elementType{};
 };
 struct AstStructType ASTNODE {
     union _FieldDecl {
@@ -115,24 +115,24 @@ struct AstStructType ASTNODE {
 
     vector<tuple<_FieldDecl, string>> fields;
 };
-struct AstPointerType ASTNODE { AstNode * baseType; };
-struct AstFunctionType ASTNODE { AstNode * signature; };
+struct AstPointerType ASTNODE { AstNode * baseType{}; };
+struct AstFunctionType ASTNODE { AstNode * signature{}; };
 struct AstSignature ASTNODE {
-    AstNode* parameters;
-    AstNode* result;
+    AstNode* parameters{};
+    AstNode* result{};
 };
 struct AstParameter ASTNODE { vector<AstNode*> parameterList; };
 struct AstParameterDecl ASTNODE {
     bool isVariadic = false;
     bool hasName = false;
-    AstNode* type;
+    AstNode* type{};
     string name;
 };
 struct AstResult ASTNODE {
     union {
         AstNode* parameter;
         AstNode* type;
-    }ar;
+    }ar{};
 };
 struct AstInterfaceType ASTNODE { vector<AstNode*> methodSpec; };
 struct AstMethodSpec ASTNODE {
@@ -142,24 +142,24 @@ struct AstMethodSpec ASTNODE {
             AstNode* signature;
         }named;
         AstNode* interfaceTypeName;
-    }ams;
+    }ams{};
 };
 struct AstMethodName ASTNODE { string methodName; };
-struct AstSliceType ASTNODE { AstNode* elementType; };
+struct AstSliceType ASTNODE { AstNode* elementType{}; };
 struct AstMapType ASTNODE {
-    AstNode* keyType;
-    AstNode* elementType;
+    AstNode* keyType{};
+    AstNode* elementType{};
 };
-struct AstChannelType ASTNODE { AstNode* elementType; };
+struct AstChannelType ASTNODE { AstNode* elementType{}; };
 // Statement
 
 struct AstStatement ASTNODE {
-    AstNode* stmt;
+    AstNode* stmt{};
 };
-struct AstBlock ASTNODE { AstNode* statementList; };
+struct AstBlock ASTNODE { AstNode* statementList{}; };
 struct AstLabeledStmt ASTNODE {
     string identifier;
-    AstNode* statement;
+    AstNode* statement{};
 };
 struct AstSimpleStmt ASTNODE {
     union {
@@ -168,95 +168,95 @@ struct AstSimpleStmt ASTNODE {
         AstNode* incDecStmt;
         AstNode* assignment;
         AstNode* shortVarDecl;
-    }ass;
+    }ass{};
 };
-struct AstGoStmt ASTNODE { AstNode* expression; };
-struct AstReturnStmt ASTNODE { AstNode* expressionList; };
+struct AstGoStmt ASTNODE { AstNode* expression{}; };
+struct AstReturnStmt ASTNODE { AstNode* expressionList{}; };
 struct AstBreakStmt ASTNODE { string label; };
 struct AstContinueStmt ASTNODE { string label; };
 struct AstGotoStmt ASTNODE { string label; };
 struct AstFallthroughStmt ASTNODE {};
 struct AstIfStmt ASTNODE {
-    AstNode* condition;
-    AstNode* expression;
-    AstNode* block;
+    AstNode* condition{};
+    AstNode* expression{};
+    AstNode* block{};
     union {
         AstNode* ifStmt;
         AstNode* block;
-    }ais;
+    }ais{};
 };
 struct AstSwitchStmt ASTNODE {
-    AstNode* condition;
-    AstNode* conditionExpr;
+    AstNode* condition{};
+    AstNode* conditionExpr{};
     vector<AstNode*> exprCaseClause;
 };
 struct AstExprCaseClause ASTNODE {
-    AstNode* exprSwitchCase;
-    AstNode* statementList;
+    AstNode* exprSwitchCase{};
+    AstNode* statementList{};
 };
 struct AstExprSwitchCase ASTNODE {
-    AstNode * expressionList;
-    bool isDefault;
+    AstNode * expressionList{};
+    bool isDefault{};
 };
 struct AstSelectStmt ASTNODE {
     vector<AstNode*> commClause;
 };
 struct AstCommClause ASTNODE {
-    AstNode* commCase;
-    AstNode* statementList;
+    AstNode* commCase{};
+    AstNode* statementList{};
 };
 struct AstCommCase ASTNODE {
     union {
         AstNode* sendStmt;
         AstNode* recvStmt;
-    }acc;
-    bool isDefault;
+    }acc{};
+    bool isDefault{};
 };
 struct AstRecvStmt ASTNODE {
     union {
         AstNode* identifierList;
         AstNode* expressionList;
-    }ars;
-    AstNode* recvExpr;
+    }ars{};
+    AstNode* recvExpr{};
 };
 struct AstForStmt ASTNODE {
     union {
         AstNode* condition;
         AstNode* forClause;
         AstNode* rangeClause;
-    }afs;
-    AstNode* block;
+    }afs{};
+    AstNode* block{};
 };
 struct AstForClause ASTNODE {
-    AstNode* initStmt;
-    AstNode* condition;
-    AstNode* postStmt;
+    AstNode* initStmt{};
+    AstNode* condition{};
+    AstNode* postStmt{};
 };
 struct AstRangeClause ASTNODE {
     union {
         AstNode* expressionList;
         AstNode* identifierList;
-    }arc;
-    AstNode* expression;
+    }arc{};
+    AstNode* expression{};
 };
-struct AstDeferStmt ASTNODE { AstNode* expression; };
-struct AstExpressionStmt ASTNODE { AstNode* expression; };
+struct AstDeferStmt ASTNODE { AstNode* expression{}; };
+struct AstExpressionStmt ASTNODE { AstNode* expression{}; };
 struct AstSendStmt ASTNODE {
-    AstNode* receiver;
-    AstNode* sender;
+    AstNode* receiver{};
+    AstNode* sender{};
 };
 struct AstIncDecStmt ASTNODE {
-    AstNode* expression;
-    bool isInc;
+    AstNode* expression{};
+    bool isInc{};
 };
 struct AstAssignment ASTNODE {
-    AstNode* lhs;
-    AstNode* rhs;
+    AstNode* lhs{};
+    AstNode* rhs{};
     TokenType assignOp;
 };
 struct AstShortVarDecl ASTNODE {
-    AstNode* lhs;
-    AstNode* rhs;
+    AstNode* lhs{};
+    AstNode* rhs{};
 };
 // Expression
 struct AstExpression ASTNODE {
@@ -267,7 +267,7 @@ struct AstExpression ASTNODE {
             AstNode* rhs;
         }named;
         AstNode* unaryExpr;
-    }ae;
+    }ae{};
 };
 struct AstUnaryExpr ASTNODE {
     union {
@@ -276,45 +276,45 @@ struct AstUnaryExpr ASTNODE {
             AstNode* unaryExpr;
             TokenType unaryOp;
         }named;
-    }aue;
+    }aue{};
 };
 struct AstPrimaryExpr ASTNODE {
-    AstNode* expr;
+    AstNode* expr{};
 };
 struct AstSelectorExpr ASTNODE {
-    AstNode* operand;
+    AstNode* operand{};
     string selector;
 };
 struct AstTypeSwitchGuardExpr ASTNODE {
-    AstNode* operand;
+    AstNode* operand{};
     // AstNode* lhs;
 };
 struct AstTypeAssertionExpr ASTNODE {
-    AstNode* operand;
-    AstNode* type;
+    AstNode* operand{};
+    AstNode* type{};
 };
 struct AstIndexExpr ASTNODE {
-    AstNode* operand;
-    AstNode* index;
+    AstNode* operand{};
+    AstNode* index{};
 };
 struct AstSliceExpr ASTNODE {
-    AstNode* operand;
-    AstNode* begin;
-    AstNode* end;
-    AstNode* step;
+    AstNode* operand{};
+    AstNode* begin{};
+    AstNode* end{};
+    AstNode* step{};
 };
 struct AstCallExpr ASTNODE {
-    AstNode* operand;
-    AstNode* arguments;
-    AstNode* type;
-    bool isVariadic;
+    AstNode* operand{};
+    AstNode* arguments{};
+    AstNode* type{};
+    bool isVariadic{};
 };
 struct AstOperand ASTNODE {
     union {
         AstNode*literal;
         AstNode*operandName;
         AstNode*expression;
-    }ao;
+    }ao{};
 };
 struct AstOperandName ASTNODE { string operandName; };
 struct AstLiteral ASTNODE {
@@ -322,7 +322,7 @@ struct AstLiteral ASTNODE {
         AstNode*basicLit;
         AstNode*compositeLit;
         AstNode*functionLit;
-    }al;
+    }al{};
 };
 struct AstBasicLit ASTNODE { TokenType type; string value; };
 struct AstCompositeLit ASTNODE {
@@ -339,13 +339,13 @@ struct AstCompositeLit ASTNODE {
         AstNode* sliceType;
         AstNode* mapType;
         AstNode* typeName;
-    }acl;
-    AstNode*literalValue;
+    }acl{};
+    AstNode*literalValue{};
 };
 struct AstLiteralValue ASTNODE { vector< AstNode*> keyedElement; };
 struct AstKeyedElement ASTNODE {
-    AstNode*key;
-    AstNode*element;
+    AstNode*key{};
+    AstNode*element{};
 };
 struct AstKey ASTNODE {
     union {
@@ -364,8 +364,8 @@ struct AstElement ASTNODE {
     }ae;
 };
 struct AstFunctionLit ASTNODE {
-    AstNode*signature;
-    AstNode*functionBody;
+    AstNode*signature{};
+    AstNode*functionBody{};
 };
 //===----------------------------------------------------------------------===//
 // global data
@@ -388,10 +388,10 @@ Token next(fstream& f) {
         f.get();
         column++;
         char oc = c;
-        c = f.peek();
+        c = static_cast<char>(f.peek());
         return oc;
     };
-    char c = f.peek();
+    char c = static_cast<char>(f.peek());
 
 skip_comment_and_find_next:
 
@@ -620,7 +620,7 @@ skip_comment_and_find_next:
         } while (f.good() && (c != '\n' && c != '\r' && c != '"'));
         if (c != '"') {
             throw runtime_error(
-                "string literal does not have a closed symbol \"\"\"");
+                    R"(string literal does not have a closed symbol """)");
         }
         lexeme += consumePeek(c);
         lastToken = LITERAL_STR;
@@ -850,6 +850,7 @@ skip_comment_and_find_next:
         lastToken = OP_MOD;
         return Token(OP_MOD, lexeme);
         // case '.' has already checked
+    default:break;
     }
 
     throw runtime_error("illegal token in source file");
@@ -890,7 +891,7 @@ const AstNode* parse(const string & filename) {
     // List parsing
     parseIdentifierList = [&](Token&t)->AstNode* {
         AstIdentifierList* node = nullptr;
-        if (t.type = TK_ID) {
+        if (t.type == TK_ID) {
             node = new  AstIdentifierList;
             node->identifierList.emplace_back(t.lexeme);
             t = next(f);
@@ -1176,6 +1177,7 @@ const AstNode* parse(const string & filename) {
             node = dynamic_cast<AstType*>(parseType(t));
             expect(OP_RPAREN, "the parenthesis () must match in type declaration");
             break;
+        default:break;
         }
 
         return node;
@@ -1223,7 +1225,7 @@ const AstNode* parse(const string & filename) {
             expect(OP_LBRACE, "left brace { must exist in struct type declaration");
             t = next(f);
             do {
-                AstStructType::_FieldDecl fd;
+                AstStructType::_FieldDecl fd{};
                 if (auto * tmp = parseIdentifierList(t); tmp != nullptr) {
                     fd.named.identifierList = tmp;
                     fd.named.type = parseType(t);
@@ -1238,7 +1240,7 @@ const AstNode* parse(const string & filename) {
                 if (t.type == LITERAL_STR) {
                     tag = t.lexeme;
                 }
-                node->fields.push_back(make_tuple(fd, tag));
+                node->fields.emplace_back(fd, tag);
                 if (t.type == OP_SEMI) {
                     t = next(f);
                 }
@@ -1291,7 +1293,7 @@ const AstNode* parse(const string & filename) {
             t = next(f);
 
             for (int i = 0, rewriteStart = 0; i < node->parameterList.size(); i++) {
-                if (dynamic_cast<AstParameterDecl*>(node->parameterList[i])->hasName == true) {
+                if (dynamic_cast<AstParameterDecl*>(node->parameterList[i])->hasName) {
                     for (int k = rewriteStart; k < i; k++) {
                         string name = dynamic_cast<AstTypeName*>(
                             dynamic_cast<AstType*>(dynamic_cast<AstParameterDecl*>(node->parameterList[k])->type)->type)->typeName;
@@ -1934,7 +1936,7 @@ const AstNode* parse(const string & filename) {
                     if (auto*tmp1 = parseExpressionList(t); tmp1 != nullptr) {
                         e->arguments = tmp1;
                     }
-                    else if (auto*tmp = parseType(t); tmp1 != nullptr) {
+                    else if (auto*tmp1 = parseType(t); tmp1 != nullptr) {
                         e->type = tmp1;
                         t = next(f);
                         if (t.type == OP_COMMA) {
@@ -2165,7 +2167,7 @@ void printLex(const string & filename) {
 
 int main(int argc, char *argv[]) {
     //printLex(filename);
-    if (argc < 2) {
+    if (argc < 2 || argv[1]==nullptr) {
         fprintf(stderr, "specify your go source file\n");
         return 1;
     }
