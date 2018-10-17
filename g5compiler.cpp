@@ -52,7 +52,6 @@ struct AstExprList ASTNODE { vector<AstExpr*> exprList; };
 struct AstStmtList ASTNODE { vector<AstStmt*> stmtList; };
 
 // Declaration
-struct AstPackageClause ASTNODE { string packageName; };
 struct AstImportDecl ASTNODE { map<string, string> imports; };
 struct AstConstDecl ASTNODE {
     vector<AstNode*> identList;
@@ -75,7 +74,7 @@ struct AstVarSpec ASTNODE {
         AstNode* exprList;
     }avs{};
 };
-struct AstFunctionDecl ASTNODE {
+struct AstFuncDecl ASTNODE {
     string funcName;
     AstNode* receiver{};
     AstNode* signature{};
@@ -85,7 +84,7 @@ struct AstSourceFile ASTNODE {
     vector<AstImportDecl*> importDecl;
     vector<AstConstDecl*> constDecl;
     vector<AstTypeDecl*> typeDecl;
-    vector<AstFunctionDecl*> funcDecl;
+    vector<AstFuncDecl*> funcDecl;
     vector<AstVarDecl*> varDecl;
 };
 // Type
@@ -110,7 +109,7 @@ struct AstStructType ASTNODE {
     vector<tuple<_FieldDecl, string>> fields;
 };
 struct AstPointerType ASTNODE { AstNode * baseType{}; };
-struct AstFunctionType ASTNODE { AstNode * signature{}; };
+struct AstFuncType ASTNODE { AstNode * signature{}; };
 struct AstSignature ASTNODE {
     AstNode* parameters{};
     AstNode* result{};
@@ -156,7 +155,7 @@ struct AstGotoStmt ASTNODE { string label; AstGotoStmt(const string&s) :label(s)
 struct AstFallthroughStmt ASTNODE {};
 struct AstIfStmt ASTNODE {
     AstNode* condition{};
-    AstNode* expression{};
+    AstNode* expr{};
     AstNode* block{};
     union {
         AstNode* ifStmt;
@@ -215,15 +214,15 @@ struct AstRangeClause ASTNODE {
         AstNode* exprList;
         AstNode* identList;
     }arc{};
-    AstNode* expression{};
+    AstNode* expr{};
 };
-struct AstExpressionStmt ASTNODE { AstNode* expression{}; };
+struct AstExprStmt ASTNODE { AstNode* expr{}; };
 struct AstSendStmt ASTNODE {
     AstExpr* receiver{};
     AstExpr* sender{};
 };
 struct AstIncDecStmt ASTNODE {
-    AstExpr* expression{};
+    AstExpr* expr{};
     bool isInc{};
 };
 struct AstAssign ASTNODE {
@@ -284,7 +283,7 @@ struct AstKeyedElement ASTNODE {
 struct AstKey ASTNODE {
     union {
         AstNode* fieldName;
-        AstNode* expression;
+        AstNode* expr;
         AstNode* literalValue;
     }ak;
 };
@@ -293,7 +292,7 @@ struct AstFieldName ASTNODE {
 };
 struct AstElement ASTNODE {
     union {
-        AstNode*expression;
+        AstNode*expr;
         AstNode*literalValue;
     }ae;
 };
@@ -813,7 +812,7 @@ const AstNode* parse(const string & filename) {
         if (t.type != tk) throw runtime_error(msg);
         return t;
     };
-    LAMBDA_FUN(TypeDecl); LAMBDA_FUN(VarDecl); LAMBDA_FUN(ConstDecl); LAMBDA_FUN(FunctionDecl); LAMBDA_FUN(LiteralValue);
+    LAMBDA_FUN(TypeDecl); LAMBDA_FUN(VarDecl); LAMBDA_FUN(ConstDecl); LAMBDA_FUN(FuncDecl); LAMBDA_FUN(LiteralValue);
     LAMBDA_FUN(ImportDecl); LAMBDA_FUN(Stmt); LAMBDA_FUN(Expr); LAMBDA_FUN(Signature); LAMBDA_FUN(UnaryExpr);
     LAMBDA_FUN(PrimaryExpr); LAMBDA_FUN(Type);
 
@@ -901,7 +900,7 @@ const AstNode* parse(const string & filename) {
             case KW_const:node->constDecl.push_back(parseConstDecl(t)); break;
             case KW_type:node->typeDecl.push_back(parseTypeDecl(t)); break;
             case KW_var:node->varDecl.push_back(parseVarDecl(t)); break;
-            case KW_func:node->funcDecl.push_back(parseFunctionDecl(t)); break;
+            case KW_func:node->funcDecl.push_back(parseFuncDecl(t)); break;
             default:break;
             }
             if (t.type == OP_SEMI) {
@@ -1068,8 +1067,8 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parseFunctionDecl = [&](Token&t)->AstFunctionDecl* {
-        AstFunctionDecl * node = new AstFunctionDecl;
+    parseFuncDecl = [&](Token&t)->AstFuncDecl* {
+        AstFuncDecl * node = new AstFuncDecl;
         eat(KW_func, "it should be func declaration");
         if (t.type == OP_LPAREN) {
             node->receiver = parseParameter(t);
@@ -1082,9 +1081,9 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseFunctionType = [&](Token&t)->AstNode* {
-        AstFunctionType* node = nullptr;
+        AstFuncType* node = nullptr;
         if (t.type == KW_func) {
-            node = new AstFunctionType;
+            node = new AstFuncType;
             t = next(f);
             node->signature = parseSignature(t);
         }
@@ -1369,7 +1368,7 @@ const AstNode* parse(const string & filename) {
             auto* stmt = new AstIncDecStmt;
             stmt->isInc = t.type == OP_INC ? true : false;
             t = next(f);
-            stmt->expression = lhs->exprList[0];
+            stmt->expr = lhs->exprList[0];
             node->stmt = stmt;
             break;
         }
@@ -1406,8 +1405,8 @@ const AstNode* parse(const string & filename) {
         }
         default: {//ExprStmt
             if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
-            auto* stmt = new AstExpressionStmt;
-            stmt->expression = lhs->exprList[0];
+            auto* stmt = new AstExprStmt;
+            stmt->expr = lhs->exprList[0];
             node->stmt = stmt;
             break;
         }
@@ -1438,7 +1437,7 @@ const AstNode* parse(const string & filename) {
                 expect(OP_SEMI, "expect an semicolon in condition part of if");
             }
             t = next(f);
-            node->expression = parseExpr(t);
+            node->expr = parseExpr(t);
             t = next(f);
             node->block = parseBlock(t);
             t = next(f);
@@ -1611,7 +1610,7 @@ const AstNode* parse(const string & filename) {
                 node = new AstRangeClause;
             }
             t = next(f);
-            node->expression = parseExpr(t);
+            node->expr = parseExpr(t);
         }
         return node;
     };
@@ -1855,7 +1854,7 @@ const AstNode* parse(const string & filename) {
         }
         else if (auto*tmp = parseExpr(t); tmp != nullptr) {
             node = new AstKey;
-            node->ak.expression = tmp;
+            node->ak.expr = tmp;
         }
         return node;
     };
@@ -1872,7 +1871,7 @@ const AstNode* parse(const string & filename) {
         AstElement*node = nullptr;
         if (auto*tmp = parseExpr(t); tmp != nullptr) {
             node = new AstElement;
-            node->ae.expression = tmp;
+            node->ae.expr = tmp;
         }
         else if (auto*tmp = parseLiteralValue(t); tmp != nullptr) {
             node = new AstElement;
