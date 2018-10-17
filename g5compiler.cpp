@@ -6,6 +6,7 @@
 //
 // Written by racaljk@github<1948638989@qq.com>
 //===----------------------------------------------------------------------===//
+#include <cassert>
 #include <cctype>
 #include <cstdio>
 #include <exception>
@@ -150,13 +151,7 @@ struct AstLabeledStmt ASTNODE {
     AstNode* statement{};
 };
 struct AstSimpleStmt ASTNODE {
-    union {
-        AstNode* expressionStmt;
-        AstNode* sendStmt;
-        AstNode* incDecStmt;
-        AstNode* assignment;
-        AstNode* shortVarDecl;
-    }ass{};
+    AstNode* stmt;
 };
 struct AstGoStmt ASTNODE { AstNode* expression{}; };
 struct AstReturnStmt ASTNODE { AstNode* expressionList{}; };
@@ -230,23 +225,35 @@ struct AstRangeClause ASTNODE {
 struct AstDeferStmt ASTNODE { AstNode* expression{}; };
 struct AstExpressionStmt ASTNODE { AstNode* expression{}; };
 struct AstSendStmt ASTNODE {
-    AstNode* receiver{};
-    AstNode* sender{};
+    AstExpression* receiver{};
+    AstExpression* sender{};
 };
 struct AstIncDecStmt ASTNODE {
-    AstNode* expression{};
+    AstExpression* expression{};
     bool isInc{};
 };
-struct AstAssignment ASTNODE {
-    AstNode* lhs{};
-    AstNode* rhs{};
-    TokenType assignOp;
+struct AstAssign ASTNODE {
+    AstExpressionList* lhs{};
+    AstExpressionList* rhs{};
+    TokenType op;
 };
-struct AstShortVarDecl ASTNODE {
-    AstNode* lhs{};
-    AstNode* rhs{};
+struct AstShortAssign ASTNODE {
+    vector<string> lhs{};
+    AstExpressionList* rhs{};
 };
 // Expression
+struct AstPrimaryExpr ASTNODE {
+    AstNode* expr{};
+};
+struct AstUnaryExpr ASTNODE {
+    union {
+        AstPrimaryExpr*primaryExpr;
+        struct {
+            AstNode* unaryExpr;
+            TokenType unaryOp;
+        }named;
+    }aue{};
+};
 struct AstExpression ASTNODE {
     union {
         struct {
@@ -254,20 +261,8 @@ struct AstExpression ASTNODE {
             TokenType binaryOp;
             AstNode* rhs;
         }named;
-        AstNode* unaryExpr;
+        AstUnaryExpr* unaryExpr;
     }ae{};
-};
-struct AstUnaryExpr ASTNODE {
-    union {
-        AstNode*primaryExpr;
-        struct {
-            AstNode* unaryExpr;
-            TokenType unaryOp;
-        }named;
-    }aue{};
-};
-struct AstPrimaryExpr ASTNODE {
-    AstNode* expr{};
 };
 struct AstSelectorExpr ASTNODE {
     AstNode* operand{};
@@ -834,7 +829,8 @@ const AstNode* parse(const string & filename) {
         return t;
     };
     LAMBDA_FUN(TypeDecl); LAMBDA_FUN(VarDecl); LAMBDA_FUN(ConstDecl); LAMBDA_FUN(FunctionDecl);LAMBDA_FUN(LiteralValue);
-    LAMBDA_FUN(ImportDecl); LAMBDA_FUN(Statement); LAMBDA_FUN(Expression); LAMBDA_FUN(Signature); 
+    LAMBDA_FUN(ImportDecl); LAMBDA_FUN(Statement); LAMBDA_FUN(Expression); LAMBDA_FUN(Signature); LAMBDA_FUN(UnaryExpr);
+    LAMBDA_FUN(PrimaryExpr);
 
     function<AstNode*(AstExpressionList *, Token&)> parseSimpleStmt;
     function<AstNode*(Token&)> parseTypeAssertion,
@@ -846,11 +842,10 @@ const AstNode* parse(const string & filename) {
         parseCompositeLit, parseFieldName, parseBasicLit,
         parseLabeledStmt, parseGoStmt, parseReturnStmt, parseBreakStmt,
         parseContinueStmt, parseGotoStmt, parseFallthroughStmt, parseBlock, parseIfStmt,
-        parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExpressionStmt,
-        parseSendStmt, parseIncDecStmt, parseAssignment, parseShortVarDecl, parseExprCaseClause,
+        parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExprCaseClause,
         parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
         parseRangeClause,
-        parseUnaryExpr, parsePrimaryExpr, parseOperand, parseOperandName, parseLiteral,
+        parseOperand, parseOperandName, parseLiteral,
         parseElementList, parseKeyedElement, parseKey, parseElement;
 
 
@@ -899,21 +894,13 @@ const AstNode* parse(const string & filename) {
     };
     auto parseStatementList = [&](Token&t)->AstStatementList* {
         AstStatementList * node = nullptr;
-        if (auto * tmp = parseStatement(t); tmp != nullptr) {
-            node = new AstStatementList;
+        AstStatement* tmp = nullptr;
+        while ((tmp = parseStatement(t))) {
+            if (node == nullptr) {
+                node = new AstStatementList;
+            }
             node->statements.push_back(tmp);
-            if (t.type == OP_SEMI) {
-                t = next(f);
-            }
-            if (t.type != OP_RBRACE) {
-                while ((tmp = parseStatement(t))) {
-                    node->statements.push_back(tmp);
-                    eat(OP_SEMI, "statement should separate by semicolon");
-                    if (t.type == OP_RBRACE) {
-                        break;
-                    }
-                }
-            }
+            if (t.type == OP_SEMI) t = next(f);
         }
         return node;
     };
@@ -1351,21 +1338,78 @@ const AstNode* parse(const string & filename) {
         case OP_LBRACE: node = new AstStatement;  node->stmt = parseBlock(t); break;
         case OP_SEMI: break;//empty statement
         case TK_ID: {
-            auto* exprList = dynamic_cast<AstExpressionList*>(parseExpressionList(t));
+            auto* exprList = parseExpressionList(t);
+            node = new AstStatement;
             if (t.type == OP_COLON) {
                 //it shall a labeled statement(not part of simple stmt so we handle it here)
                 t = next(f);
                 AstLabeledStmt * labeledStmt = new AstLabeledStmt;
                 labeledStmt->label = "todo";//todo:rewrite it
                 labeledStmt->statement = parseStatement(t);
-
-                node = new AstStatement;
                 node->stmt = labeledStmt;
+            }else{
+                node->stmt = parseSimpleStmt(exprList,t);
             }
-            eat(OP_SEMI, "expect ;");
             break;
         }
         default:break;
+        }
+        return node;
+    };
+    parseSimpleStmt = [&](AstExpressionList* lhs, Token&t)->AstNode* {
+        AstSimpleStmt * node = new AstSimpleStmt;
+        if (lhs == nullptr) {
+            lhs = parseExpressionList(t);
+        }
+
+        switch (t.type) {
+        case OP_CHAN: {
+            t = next(f);
+            assert(lhs->expressionList.size() == 1, "one expr required");
+            auto* stmt = new AstSendStmt;
+            stmt->receiver = lhs->expressionList[0];
+            stmt->sender = parseExpression(t);
+            node->stmt = stmt;
+            break;
+        }
+        case OP_INC:case OP_DEC: {
+            assert(lhs->expressionList.size() == 1, "one expr required");
+            auto* stmt = new AstIncDecStmt;
+            stmt->isInc = t.type == OP_INC ? true : false;
+            t = next(f);
+            stmt->expression = lhs->expressionList[0];
+            node->stmt = stmt;
+            break;
+        }
+        case OP_SHORTAGN: {
+            auto*stmt = new AstShortAssign;
+            for(auto* e : lhs->expressionList) {
+                stmt->lhs.push_back(dynamic_cast<AstName*>(dynamic_cast<AstCompositeLit*>(
+                    dynamic_cast<AstOperand*>(
+                        e->ae.unaryExpr->aue.primaryExpr->expr)->operand)->literalType)->name);
+            }
+            t = next(f);
+            stmt->rhs = parseExpressionList(t);
+            node->stmt = stmt;
+            break;
+        }
+        case OP_AGN: {
+            assert(lhs->expressionList.size() >= 1, "one or more expr required");
+            auto* stmt = new AstAssign;
+            stmt->lhs = lhs;
+            stmt->op = t.type;
+            t = next(f);
+            stmt->rhs = parseExpressionList(t);
+            node->stmt = stmt;
+            break;
+        }
+        default: {//ExprStmt
+            assert(lhs->expressionList.size() == 1, "send stmt requires");
+            auto* stmt = new AstExpressionStmt;
+            stmt->expression = lhs->expressionList[0];
+            node->stmt = stmt;
+            break;
+        }
         }
         return node;
     };
@@ -1381,38 +1425,6 @@ const AstNode* parse(const string & filename) {
             else {
                 t = next(f);
             }
-        }
-        return node;
-    };
-    parseSimpleStmt = [&](AstNode * exprList, Token&t)->AstNode* {
-        AstSimpleStmt * node = nullptr;
-        if (exprList == nullptr) {
-            exprList = parseExpressionList(t);
-        }
-
-        switch (t.type) {
-        case OP_CHAN: {
-
-            break;
-        }
-        case OP_INC: {
-            break;
-        }
-        case OP_DEC: {
-            break;
-        }
-        case OP_COLON: {
-            break;
-        }
-        case OP_SHORTAGN: {
-            break;
-        }
-        case OP_AGN: {
-            break;
-        }
-        default: {
-            break;
-        }
         }
         return node;
     };
@@ -1578,7 +1590,8 @@ const AstNode* parse(const string & filename) {
         if (t.type == KW_case) {
             node = new AstCommCase;
             t = next(f);
-            if (auto*tmp = parseSendStmt(t); tmp != nullptr) {
+            //todo
+            /*if (auto*tmp = parseSendStmt(t); tmp != nullptr) {
                 node->acc.sendStmt = tmp;
             }
             else if (auto*tmp = parseRecvStmt(t); tmp != nullptr) {
@@ -1586,7 +1599,7 @@ const AstNode* parse(const string & filename) {
             }
             else if (t.type == KW_default) {
                 node->isDefault = true;
-            }
+            }*/
         }
         return node;
     };
@@ -1668,71 +1681,6 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parseExpressionStmt = [&](Token&t)->AstNode* {
-        AstExpressionStmt* node = nullptr;
-        if (auto*tmp = parseExpression(t); tmp != nullptr) {
-            node = new AstExpressionStmt;
-            node->expression = tmp;
-        }
-        return node;
-    };
-    parseSendStmt = [&](Token&t)->AstNode* {
-        AstSendStmt* node = nullptr;
-        if (auto*tmp = parseExpression(t); tmp != nullptr) {
-            node = new AstSendStmt;
-            node->receiver = tmp;
-            expect(OP_CHAN, "expect a channel symbol");
-            node->sender = parseExpression(t);
-        }
-        return node;
-    };
-    parseIncDecStmt = [&](Token&t)->AstNode* {
-        AstIncDecStmt* node = nullptr;
-        if (auto*tmp = parseExpression(t); tmp != nullptr) {
-            node = new AstIncDecStmt;
-            node->expression = tmp;
-            t = next(f);
-            if (t.type == OP_INC) {
-                node->isInc = true;
-            }
-            else if (t.type == OP_DEC) {
-                node->isInc = false;
-            }
-            else {
-                throw runtime_error("expect ++/--");
-            }
-        }
-        return node;
-    };
-    parseAssignment = [&](Token&t)->AstNode* {
-        AstAssignment* node = nullptr;
-        if (auto*tmp = parseExpressionList(t); tmp != nullptr) {
-            node = new AstAssignment;
-            node->lhs = tmp;
-            t = next(f);
-            if (t.type == OP_ADD || t.type == OP_SUB ||
-                t.type == OP_BITOR || t.type == OP_XOR ||
-                t.type == OP_MUL || t.type == OP_DIV ||
-                t.type == OP_MOD || t.type == OP_LSHIFT ||
-                t.type == OP_RSHIFT || t.type == OP_BITAND ||
-                t.type == OP_ANDXOR) {
-                node->assignOp = t.type;
-            }
-            expect(OP_EQ, "expect =");
-            node->rhs = parseExpressionList(t);
-        }
-        return node;
-    };
-    parseShortVarDecl = [&](Token&t)->AstNode* {
-        AstShortVarDecl* node = nullptr;
-        if (auto*tmp = parseIdentifierList(t); tmp != nullptr) {
-            node = new AstShortVarDecl;
-            node->lhs = tmp;
-            expect(OP_SHORTAGN, "expect := in short assign statement");
-            node->rhs = parseExpressionList(t);
-        }
-        return node;
-    };
 #pragma endregion
 #pragma region Expression
     parseExpression = [&](Token&t)->AstExpression* {
@@ -1755,7 +1703,7 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parseUnaryExpr = [&](Token&t)->AstNode* {
+    parseUnaryExpr = [&](Token&t)->AstUnaryExpr* {
         AstUnaryExpr* node = nullptr;
         if (t.type == OP_ADD || t.type == OP_SUB || t.type == OP_NOT ||
             t.type == OP_XOR || t.type == OP_MUL || t.type == OP_BITAND || t.type == OP_CHAN) {
@@ -1770,7 +1718,7 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parsePrimaryExpr = [&](Token&t)->AstNode* {
+    parsePrimaryExpr = [&](Token&t)->AstPrimaryExpr* {
         AstPrimaryExpr*node = nullptr;
         if (auto*tmp = parseOperand(t); tmp != nullptr) {
             node = new AstPrimaryExpr;
@@ -1900,8 +1848,8 @@ const AstNode* parse(const string & filename) {
             if (t.type == OP_VARIADIC) {
                 tmp = new AstArrayType;
                 dynamic_cast<AstArrayType*>(tmp)->automaticLen = true;
-                expect(OP_RBRACKET, "expect ]");
-                t = next(f);
+                eat(OP_VARIADIC,"expect ... in array declaration");
+                eat(OP_RBRACKET, "array/slice requires ]");
                 dynamic_cast<AstArrayType*>(tmp)->elementType = parseType(t);
             }
             else {
