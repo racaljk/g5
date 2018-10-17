@@ -297,14 +297,6 @@ struct AstCallExpr ASTNODE {
     AstNode* type{};
     bool isVariadic{};
 };
-struct AstOperand ASTNODE {
-    AstNode*operand;
-};
-struct AstBasicLit ASTNODE { TokenType type; string value; };
-struct AstCompositeLit ASTNODE {
-    AstNode*literalType{};
-    AstNode*literalValue{};
-};
 struct AstLiteralValue ASTNODE { vector< AstNode*> keyedElement; };
 struct AstKeyedElement ASTNODE {
     AstNode*key{};
@@ -329,6 +321,14 @@ struct AstElement ASTNODE {
 struct AstFunctionLit ASTNODE {
     AstNode*signature{};
     AstNode*functionBody{};
+};
+struct AstOperand ASTNODE {
+    AstNode*operand;
+};
+struct AstBasicLit ASTNODE { TokenType type; string value; };
+struct AstCompositeLit ASTNODE {
+    AstNode*literalType{};
+    AstLiteralValue* literalValue{};
 };
 //===----------------------------------------------------------------------===//
 // global data
@@ -833,8 +833,8 @@ const AstNode* parse(const string & filename) {
         if (t.type != tk) throw runtime_error(msg);
         return t;
     };
-    LAMBDA_FUN(Name); LAMBDA_FUN(TypeDecl); LAMBDA_FUN(VarDecl); LAMBDA_FUN(ConstDecl); LAMBDA_FUN(FunctionDecl);
-    LAMBDA_FUN(ImportDecl); LAMBDA_FUN(Statement); LAMBDA_FUN(Expression); LAMBDA_FUN(Signature);
+    LAMBDA_FUN(TypeDecl); LAMBDA_FUN(VarDecl); LAMBDA_FUN(ConstDecl); LAMBDA_FUN(FunctionDecl);LAMBDA_FUN(LiteralValue);
+    LAMBDA_FUN(ImportDecl); LAMBDA_FUN(Statement); LAMBDA_FUN(Expression); LAMBDA_FUN(Signature); 
 
     function<AstNode*(AstExpressionList *, Token&)> parseSimpleStmt;
     function<AstNode*(Token&)> parseTypeAssertion,
@@ -851,7 +851,7 @@ const AstNode* parse(const string & filename) {
         parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
         parseRangeClause,
         parseUnaryExpr, parsePrimaryExpr, parseOperand, parseOperandName, parseLiteral,
-        parseLiteralValue, parseElementList, parseKeyedElement, parseKey, parseElement;
+        parseElementList, parseKeyedElement, parseKey, parseElement;
 
 
 
@@ -1274,21 +1274,20 @@ const AstNode* parse(const string & filename) {
         AstInterfaceType* node = new AstInterfaceType;
         eat(KW_interface, "interface type requires keyword interface");
         eat(OP_LBRACE, "{ is required after interface");
-        do {
+        while (t.type != OP_RBRACE){
             if (auto*tmp = parseMethodSpec(t); tmp != nullptr) {
                 node->methodSpec.push_back(tmp);
                 if (t.type == OP_SEMI) {
                     t = next(f);
                 }
             }
-        } while (t.type != OP_RBRACE);
+        }
         t = next(f);
         return node;
     };
     parseMethodSpec = [&](Token&t)->AstNode* {
         AstMethodSpec* node = new AstMethodSpec;
-        auto* tmp = parseName(t);
-        if (auto* tmp = parseName(t); tmp->name.find(".") == string::npos) {
+        if (auto* tmp = parseName(t); tmp!=nullptr && tmp->name.find(".") == string::npos) {
             node->methodName = tmp;
             node->signature = parseSignature(t);
         }
@@ -1929,7 +1928,7 @@ const AstNode* parse(const string & filename) {
 
         return node;
     };
-    parseLiteralValue = [&](Token&t)->AstNode* {
+    parseLiteralValue = [&](Token&t)->AstLiteralValue* {
         AstLiteralValue*node = nullptr;
         if (t.type == OP_LBRACE) {
             node = new AstLiteralValue;
