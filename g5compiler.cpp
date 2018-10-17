@@ -6,7 +6,6 @@
 //
 // Written by racaljk@github<1948638989@qq.com>
 //===----------------------------------------------------------------------===//
-#include <cassert>
 #include <cctype>
 #include <cstdio>
 #include <exception>
@@ -246,23 +245,13 @@ struct AstPrimaryExpr ASTNODE {
     AstNode* expr{};
 };
 struct AstUnaryExpr ASTNODE {
-    union {
-        AstPrimaryExpr*primaryExpr;
-        struct {
-            AstNode* unaryExpr;
-            TokenType unaryOp;
-        }named;
-    }aue{};
+    AstNode*expr;
+    TokenType op;
 };
 struct AstExpression ASTNODE {
-    union {
-        struct {
-            AstNode* lhs;
-            TokenType binaryOp;
-            AstNode* rhs;
-        }named;
-        AstUnaryExpr* unaryExpr;
-    }ae{};
+    AstUnaryExpr* lhs;
+    TokenType op;
+    AstExpression* rhs;
 };
 struct AstSelectorExpr ASTNODE {
     AstNode* operand{};
@@ -1322,7 +1311,6 @@ const AstNode* parse(const string & filename) {
         switch (t.type) {
         case KW_type: node = new AstStatement; node->stmt = parseTypeDecl(t); break;
         case KW_const: node = new AstStatement; node->stmt = parseConstDecl(t); break;
-        case KW_func: node = new AstStatement; node->stmt = parseFunctionDecl(t); break;
         case KW_var: node = new AstStatement; node->stmt = parseVarDecl(t); break;
         case KW_go: node = new AstStatement; node->stmt = parseGoStmt(t); break;
         case KW_return: node = new AstStatement; node->stmt = parseReturnStmt(t); break;
@@ -1337,7 +1325,11 @@ const AstNode* parse(const string & filename) {
         case KW_defer: node = new AstStatement; node->stmt = parseDeferStmt(t); break;
         case OP_LBRACE: node = new AstStatement;  node->stmt = parseBlock(t); break;
         case OP_SEMI: break;//empty statement
-        case TK_ID: {
+/*[GROUP]*/case OP_ADD:case OP_SUB:case OP_NOT:case OP_XOR:case OP_MUL:case OP_CHAN:              
+/*[GROUP]*/case LITERAL_STR:case LITERAL_INT:case LITERAL_IMG:case LITERAL_FLOAT:case LITERAL_RUNE:
+/*[GROUP]*/case KW_func:
+/*[GROUP]*/case KW_struct:case KW_map:case OP_LBRACKET:case TK_ID: case OP_LPAREN:
+        {
             auto* exprList = parseExpressionList(t);
             node = new AstStatement;
             if (t.type == OP_COLON) {
@@ -1364,8 +1356,8 @@ const AstNode* parse(const string & filename) {
 
         switch (t.type) {
         case OP_CHAN: {
+            if (lhs->expressionList.size() != 1) throw runtime_error("one expr required");
             t = next(f);
-            assert(lhs->expressionList.size() == 1, "one expr required");
             auto* stmt = new AstSendStmt;
             stmt->receiver = lhs->expressionList[0];
             stmt->sender = parseExpression(t);
@@ -1373,7 +1365,7 @@ const AstNode* parse(const string & filename) {
             break;
         }
         case OP_INC:case OP_DEC: {
-            assert(lhs->expressionList.size() == 1, "one expr required");
+            if (lhs->expressionList.size() != 1) throw runtime_error("one expr required");
             auto* stmt = new AstIncDecStmt;
             stmt->isInc = t.type == OP_INC ? true : false;
             t = next(f);
@@ -1382,11 +1374,19 @@ const AstNode* parse(const string & filename) {
             break;
         }
         case OP_SHORTAGN: {
+            if (lhs->expressionList.size() == 0) throw runtime_error("one expr required");
             auto*stmt = new AstShortAssign;
             for(auto* e : lhs->expressionList) {
-                stmt->lhs.push_back(dynamic_cast<AstName*>(dynamic_cast<AstCompositeLit*>(
-                    dynamic_cast<AstOperand*>(
-                        e->ae.unaryExpr->aue.primaryExpr->expr)->operand)->literalType)->name);
+
+                string identName = dynamic_cast<AstName*>(
+                    dynamic_cast<AstCompositeLit*>(
+                        dynamic_cast<AstOperand*>(
+                            dynamic_cast<AstPrimaryExpr*>(e->lhs->expr)->expr
+                            )->operand
+                        )->literalType
+                    )->name;
+
+                stmt->lhs.push_back(identName);
             }
             t = next(f);
             stmt->rhs = parseExpressionList(t);
@@ -1394,7 +1394,7 @@ const AstNode* parse(const string & filename) {
             break;
         }
         case OP_AGN: {
-            assert(lhs->expressionList.size() >= 1, "one or more expr required");
+            if (lhs->expressionList.size() == 0) throw runtime_error("one expr required");
             auto* stmt = new AstAssign;
             stmt->lhs = lhs;
             stmt->op = t.type;
@@ -1404,7 +1404,7 @@ const AstNode* parse(const string & filename) {
             break;
         }
         default: {//ExprStmt
-            assert(lhs->expressionList.size() == 1, "send stmt requires");
+            if (lhs->expressionList.size() != 1) throw runtime_error("one expr required");
             auto* stmt = new AstExpressionStmt;
             stmt->expression = lhs->expressionList[0];
             node->stmt = stmt;
@@ -1687,7 +1687,7 @@ const AstNode* parse(const string & filename) {
         AstExpression* node = nullptr;
         if (auto*tmp = parseUnaryExpr(t); tmp != nullptr) {
             node = new  AstExpression;
-            node->ae.unaryExpr = tmp;
+            node->lhs = tmp;
             if (t.type == OP_OR || t.type == OP_AND || t.type == OP_EQ ||
                 t.type == OP_NE || t.type == OP_LT || t.type == OP_LE ||
                 t.type == OP_GT || t.type == OP_GE || t.type == OP_ADD ||
@@ -1695,26 +1695,27 @@ const AstNode* parse(const string & filename) {
                 t.type == OP_MUL || t.type == OP_DIV || t.type == OP_MOD ||
                 t.type == OP_LSHIFT || t.type == OP_RSHIFT || t.type == OP_BITAND ||
                 t.type == OP_XOR) {
-                node->ae.named.binaryOp = t.type;
-                node->ae.named.lhs = tmp;
+                node->op = t.type;
                 t = next(f);
-                node->ae.named.rhs = parseExpression(t);
+                node->rhs = parseExpression(t);
             }
         }
         return node;
     };
     parseUnaryExpr = [&](Token&t)->AstUnaryExpr* {
         AstUnaryExpr* node = nullptr;
-        if (t.type == OP_ADD || t.type == OP_SUB || t.type == OP_NOT ||
-            t.type == OP_XOR || t.type == OP_MUL || t.type == OP_BITAND || t.type == OP_CHAN) {
+        switch (t.type) {
+        case OP_ADD:case OP_SUB:case OP_NOT:
+        case OP_XOR:case OP_MUL:case OP_BITAND:case OP_CHAN:
             node = new AstUnaryExpr;
-            node->aue.named.unaryOp = t.type;
+            node->op = t.type;
             t = next(f);
-            node->aue.named.unaryExpr = parseUnaryExpr(t);
-        }
-        else if (auto*tmp = parsePrimaryExpr(t); tmp != nullptr) {
+            node->expr = parseUnaryExpr(t);
+            break;
+        default:
             node = new AstUnaryExpr;
-            node->aue.primaryExpr = tmp;
+            node->expr = parsePrimaryExpr(t);
+            break;
         }
         return node;
     };
@@ -1763,6 +1764,7 @@ const AstNode* parse(const string & filename) {
                             e->index = start;
                             tmp = e;
                             t = next(f);
+                            continue;
                         }
 
                     }

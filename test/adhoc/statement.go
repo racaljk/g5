@@ -9,6 +9,8 @@ import (
 )
 
 func simplestmt(){
+    i &^= 1<<n
+    a[i] = 23
     //expr stmt
     h(x+y)
     f.Close()
@@ -22,10 +24,9 @@ func simplestmt(){
     //assign stmt
     x = 1
     *p = f()
-    a[i] = 23
+    
     (k) = <-ch  
     a[i] <<= 2
-    i &^= 1<<n
     x, y = f()
     //short assign stmt
     i, j := 0, 10
