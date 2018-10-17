@@ -681,6 +681,7 @@ skip_comment_and_find_next:
         else if (c == '<') {
             lexeme += consumePeek(c);
             if (c == '=') {
+                lexeme += consumePeek(c);
                 lastToken = OP_LSFTAGN;
                 return Token(OP_LSFTAGN, lexeme);
             }
@@ -1307,7 +1308,7 @@ const AstNode* parse(const string & filename) {
 #pragma endregion
 #pragma region Statement
     parseStatement = [&](Token&t)->AstStatement* {
-        AstStatement * node = nullptr;
+         AstStatement * node = nullptr;
         switch (t.type) {
         case KW_type: node = new AstStatement; node->stmt = parseTypeDecl(t); break;
         case KW_const: node = new AstStatement; node->stmt = parseConstDecl(t); break;
@@ -1393,7 +1394,8 @@ const AstNode* parse(const string & filename) {
             node->stmt = stmt;
             break;
         }
-        case OP_AGN: {
+        case OP_ADDAGN:case OP_SUBAGN:case OP_BITORAGN:case OP_BITXORAGN:case OP_MULAGN:case OP_DIVAGN:
+        case OP_MODAGN:case OP_LSFTAGN:case OP_RSFTAGN:case OP_BITANDAGN:case OP_ANDXORAGN:case OP_AGN:{
             if (lhs->expressionList.size() == 0) throw runtime_error("one expr required");
             auto* stmt = new AstAssign;
             stmt->lhs = lhs;
@@ -1429,19 +1431,17 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseGoStmt = [&](Token&t)->AstNode* {
-        AstGoStmt * node = nullptr;
-        if (t.type == KW_go) {
-            node = new AstGoStmt;
-            node->expression = parseExpression(t);
-        }
+        AstGoStmt * node = new AstGoStmt;
+        eat(KW_go, "expect keyword go");
+        node->expression = parseExpression(t);
+        
         return node;
     };
     parseReturnStmt = [&](Token&t)->AstNode* {
         AstReturnStmt * node = nullptr;
-        if (t.type == KW_return) {
-            node = new AstReturnStmt;
-            node->expressionList = parseExpressionList(t);
-        }
+        node = new AstReturnStmt;
+        eat(KW_return, "expect keyword return");
+        node->expressionList = parseExpressionList(t);
         return node;
     };
     parseBreakStmt = [&](Token&t)->AstNode* {
@@ -1473,18 +1473,15 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseGotoStmt = [&](Token&t)->AstNode* {
-        AstGotoStmt* node = nullptr;
-        if (t.type == KW_goto) {
-            node = new AstGotoStmt;
-            node->label = expect(TK_ID, "goto statement must follow a label").lexeme;
-        }
+        AstGotoStmt* node =  new AstGotoStmt;
+        eat(KW_goto, "expect keyword goto");
+        node->label = expect(TK_ID, "goto statement must follow a label").lexeme;
+        t = next(f);
         return node;
     };
     parseFallthroughStmt = [&](Token&t)->AstNode* {
-        AstFallthroughStmt* node = nullptr;
-        if (t.type == KW_fallthrough) {
-            node = new AstFallthroughStmt;
-        }
+        AstFallthroughStmt* node = new AstFallthroughStmt;
+        eat(KW_fallthrough, "expect keyword fallthrough");
         return node;
     };
     parseIfStmt = [&](Token&t)->AstNode* {
@@ -1952,7 +1949,6 @@ const AstNode* parse(const string & filename) {
             node = new AstFunctionLit;
             t = next(f);
             node->signature = parseSignature(t);
-            t = next(f);
             node->functionBody = parseBlock(t);
         }
         return node;
@@ -1978,11 +1974,11 @@ void printLex(const string & filename) {
 }
 
 int main(int argc, char *argv[]) {
-    //printLex(filename);
     if (argc < 2 || argv[1]==nullptr) {
         fprintf(stderr, "specify your go source file\n");
         return 1;
     }
+    printLex(argv[1]);
     const AstNode* ast = parse(argv[1]);
     fprintf(stdout, "parsing passed\n");
     return 0;
