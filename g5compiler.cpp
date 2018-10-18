@@ -285,10 +285,7 @@ struct AstElement _ND {
 };
 struct AstOperand _ND { AstNode*operand; };
 struct AstBasicLit _ND { TokenType type; string value; };
-struct AstCompositeLit _ND {
-    AstNode*litName{};
-    AstLitValue* litValue{};
-};
+struct AstCompositeLit _ND { AstNode* litName; AstLitValue* litValue; };
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
@@ -805,7 +802,7 @@ const AstNode* parse(const string & filename) {
         parseParameter, parseParameterDecl, parseResult, parseInterfaceType,
         parseMethodName, parseMapType, parseChannelType, 
         parseTypeSpec, parseVarSpec,
-        parseCompositeLit, parseFieldName, parseBasicLit,
+        parseFieldName, parseBasicLit,
         parseLabeledStmt, parseGoStmt, parseReturnStmt, parseBreakStmt,
         parseContinueStmt, parseGotoStmt, parseFallthroughStmt, parseBlock, parseIfStmt,
         parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExprCaseClause,
@@ -1179,7 +1176,14 @@ const AstNode* parse(const string & filename) {
         eat(OP_LBRACKET, "array/slice type requires [ to denote that");
         if (t.type != OP_RBRACKET) {
             node = new AstArrayType;
-            dynamic_cast<AstArrayType*>(node)->length = parseExpr(t);
+            if (t.type == OP_VARIADIC) {
+                dynamic_cast<AstArrayType*>(node)->automaticLen = true;
+                t = next(f);
+            }
+            else {
+                dynamic_cast<AstArrayType*>(node)->length = parseExpr(t);
+            }
+            
             t = next(f);
             dynamic_cast<AstArrayType*>(node)->elementType = parseType(t);
         }
@@ -1362,13 +1366,9 @@ const AstNode* parse(const string & filename) {
             auto*stmt = new AstShortAssign;
             for (auto* e : lhs->exprList) {
 
-                string identName = dynamic_cast<AstName*>(
-                    dynamic_cast<AstCompositeLit*>(
-                        dynamic_cast<AstOperand*>(
-                            dynamic_cast<AstPrimaryExpr*>(e->lhs->expr)->expr
-                            )->operand
-                        )->litName
-                    )->name;
+                string identName =
+                    dynamic_cast<AstName*>(dynamic_cast<AstType*>(dynamic_cast<AstOperand*>(dynamic_cast<AstPrimaryExpr*>(
+                        e->lhs->expr)->expr)->operand)->type)->name;
 
                 stmt->lhs.push_back(identName);
             }
@@ -1701,17 +1701,18 @@ const AstNode* parse(const string & filename) {
                     if (auto*tmp1 = parseExprList(t); tmp1 != nullptr) {
                         e->arguments = tmp1;
                     }
-                    else if (auto*tmp1 = parseType(t); tmp1 != nullptr) {
-                        e->type = tmp1;
-                        t = next(f);
-                        if (t.type == OP_COMMA) {
-                            e->arguments = parseExprList(t);
-                        }
-                    }
                     if (t.type == OP_VARIADIC) {
                         e->isVariadic = true;
                         t = next(f);
                     }
+                    tmp = e;
+                }
+                else if (t.type == OP_LBRACE) {
+                    // it's somewhat curious since official implementation treats literal type
+                    // and literal value as separate parts
+                    auto* e = new AstCompositeLit;
+                    e->litName = tmp;
+                    e->litValue = parseLitValue(t);
                     tmp = e;
                 }
                 else {
@@ -1725,14 +1726,11 @@ const AstNode* parse(const string & filename) {
     parseOperand = [&](Token&t)->AstNode* {
         AstOperand*node{};
         switch (t.type) {
-        case LIT_INT:
-        case LIT_FLOAT:
-        case LIT_IMG:
-        case LIT_RUNE:
-        case LIT_STR:
+        case LIT_INT:case LIT_FLOAT:case LIT_IMG:case LIT_RUNE:case LIT_STR:
             node = new AstOperand; node->operand = parseBasicLit(t); break;
-        case KW_struct:case KW_map:case OP_LBRACKET:case TK_ID:
-            node = new AstOperand; node->operand = parseCompositeLit(t); break;
+        case KW_struct:case KW_map:case OP_LBRACKET:case KW_chan:
+        case KW_interface:case TK_ID:
+            node = new AstOperand; node->operand = parseType(t); break;
         case KW_func:
             node = new AstOperand; node->operand = parseFuncDecl(true, t); break;
         case OP_LPAREN:
@@ -1750,44 +1748,6 @@ const AstNode* parse(const string & filename) {
         t = next(f);
         return node;
     };
-    parseCompositeLit = [&](Token&t)->AstNode* {
-        AstCompositeLit* node{};
-        switch (t.type) {
-        case KW_struct: node = new AstCompositeLit; node->litName = parseStructType(t); node->litValue = parseLitValue(t); break;
-        case KW_map: node = new AstCompositeLit; node->litName = parseMapType(t); node->litValue = parseLitValue(t); break;
-        case TK_ID: node = new AstCompositeLit; node->litName = parseName(t); node->litValue = parseLitValue(t); break;
-        case OP_LBRACKET: {//slice or array 
-            t = next(f);
-            AstNode* tmp = nullptr;
-            if (t.type == OP_VARIADIC) {
-                tmp = new AstArrayType;
-                dynamic_cast<AstArrayType*>(tmp)->automaticLen = true;
-                eat(OP_VARIADIC, "expect ... in array declaration");
-                eat(OP_RBRACKET, "array/slice requires ]");
-                dynamic_cast<AstArrayType*>(tmp)->elementType = parseType(t);
-            }
-            else {
-                if (t.type != OP_RBRACKET) {
-                    tmp = new AstArrayType;
-                    dynamic_cast<AstArrayType*>(tmp)->length = parseExpr(t);
-                    dynamic_cast<AstArrayType*>(tmp)->elementType = parseType(t);
-                }
-                else {
-                    t = next(f);
-                    tmp = new AstSliceType;
-                    dynamic_cast<AstSliceType*>(tmp)->elementType = parseType(t);
-                }
-
-            }
-            node = new AstCompositeLit;
-            node->litName = tmp;
-            node->litValue = parseLitValue(t);
-            break;
-        }
-        default:throw runtime_error("should not reach here");
-        }
-        return node;
-    };
     parseLitValue = [&](Token&t)->AstLitValue* {
         AstLitValue*node{};
         if (t.type == OP_LBRACE) {
@@ -1795,7 +1755,6 @@ const AstNode* parse(const string & filename) {
             do {
                 t = next(f);
                 if (t.type == OP_RBRACE) break; // it's necessary since both {a,b} or {a,b,} are legal form
-
                 node->keyedElement.push_back(parseKeyedElement(t));
             } while (t.type != OP_RBRACE);
             eat(OP_RBRACE, "brace {} must match");
