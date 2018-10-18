@@ -1679,6 +1679,7 @@ const AstNode* parse(const string & filename) {
                     tmp = e;
                 }
                 else if (t.type == OP_LPAREN) {
+                    t = next(f);
                     auto* e = new AstCallExpr;
                     e->operand = tmp;
                     if (auto*tmp1 = parseExprList(t); tmp1 != nullptr) {
@@ -1688,6 +1689,7 @@ const AstNode* parse(const string & filename) {
                         e->isVariadic = true;
                         t = next(f);
                     }
+                    eat(OP_RPAREN, "call of a function withou ) parenthesis");
                     tmp = e;
                 }
                 else if (t.type == OP_LBRACE) {
