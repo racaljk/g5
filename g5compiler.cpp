@@ -68,7 +68,7 @@ struct AstFuncDecl _ND {
     string funcName;
     AstNode* receiver{};
     AstNode* signature{};
-    AstNode* functionBody{};
+    AstStmtList* funcBody{};
 };
 struct AstSourceFile _ND {
     vector<AstImportDecl*> importDecl;
@@ -90,7 +90,7 @@ struct AstStructType _ND {
 };
 struct AstPtrType _ND { AstType * baseType{}; };
 struct AstSignature _ND {
-    AstNode* parameters{};
+    AstNode* param{};
     AstNode* result{};
 };
 struct AstFuncType _ND { AstSignature * signature{}; };
@@ -113,7 +113,7 @@ struct AstInterfaceType _ND { vector<AstMethodSpec*> methodSpec; };
 struct AstSliceType _ND { AstType* elemType{}; };
 struct AstMapType _ND {AstType* keyType{};AstType* elemType{};};
 struct AstChanType _ND { AstType* elemType{}; };
-struct AstBlock _ND { AstNode* stmtList{}; };
+// Statement
 struct AstGoStmt _ND { AstExpr* expr{}; AstGoStmt(AstExpr* expr) :expr(expr) {} };
 struct AstReturnStmt _ND { AstExprList* exprList{}; AstReturnStmt(AstExprList* el) :exprList(el) {} };
 struct AstBreakStmt _ND { string label; AstBreakStmt(const string&s) :label(s) {} };
@@ -135,12 +135,12 @@ struct AstIfStmt _ND {
     }ais{};
 };
 struct AstSwitchStmt _ND {
-    AstNode* condition{};
-    AstNode* conditionExpr{};
-    vector<AstNode*> exprCaseClause;
+    AstNode* before{};
+    AstNode* middle{};
+    vector<AstNode*> caseList{};
 };
-struct AstExprCaseClause _ND {
-    AstNode* exprSwitchCase{};
+struct AstSwitchCase _ND {
+    AstNode* exprList{};
     AstNode* stmtList{};
 };
 struct AstExprSwitchCase _ND {
@@ -188,23 +188,23 @@ struct AstRangeClause _ND {
     }arc{};
     AstNode* expr{};
 };
-struct AstExprStmt _ND { AstNode* expr{}; };
+struct AstExprStmt _ND { AstExpr* expr{}; };
 struct AstSendStmt _ND { AstExpr* receiver{}, *sender{}; };
 struct AstIncDecStmt _ND {
     AstExpr* expr{};
     bool isInc{};
 };
-struct AstAssign _ND {
+struct AstAssignStmt _ND {
     AstExprList* lhs{}, *rhs{};
     TokenType op;
 };
-struct AstShortAssign _ND {
+struct AstSAssignStmt _ND {//short assign
     vector<string> lhs{};
     AstExprList* rhs{};
 };
 // Expression
 struct AstPrimaryExpr _ND {
-    AstNode* expr{};//one of SelectorExpr, TypeSwitchGuardExpr,TypeAssertionExpr,IndexExpr,SliceExpr,CallExpr,Operand
+    AstNode* expr{};//one of SelectorExpr, TypeSwitchExpr,TypeAssertionExpr,IndexExpr,SliceExpr,CallExpr,Operand
 };
 struct AstUnaryExpr _ND {
     AstNode*expr;
@@ -219,9 +219,8 @@ struct AstSelectorExpr _ND {
     AstNode* operand{};
     string selector;
 };
-struct AstTypeSwitchGuardExpr _ND {
+struct AstTypeSwitchExpr _ND {
     AstNode* operand{};
-    // AstNode* lhs;
 };
 struct AstTypeAssertionExpr _ND {
     AstNode* operand{};
@@ -758,21 +757,22 @@ const AstNode* parse(const string & filename) {
     LAMBDA_FUN(ImportDecl); LAMBDA_FUN(Expr); LAMBDA_FUN(Signature); LAMBDA_FUN(UnaryExpr);
     LAMBDA_FUN(PrimaryExpr); LAMBDA_FUN(Type); LAMBDA_FUN(MethodSpec); LAMBDA_FUN(TypeSpec);
 
+
     function<AstFuncDecl*(bool, Token&)> parseFuncDecl;
     function<AstNode*(AstExprList *, Token&)> parseSimpleStmt;
-
+    function<AstStmtList*(Token&)> parseBlock;
     function<AstNode*(Token&)> parseTypeAssertion,
         parseArrayOrSliceType, parseStructType, parsePointerType, parseFuncType,
         parseParam, parseParamDecl, parseResult, parseInterfaceType,
         parseMethodName, parseMapType, parseChannelType,
         parseVarSpec, parseStmt,
         parseFieldName, parseBasicLit,
-        parseLabeledStmt, parseGoStmt, parseReturnStmt, parseBreakStmt,
-        parseContinueStmt, parseGotoStmt, parseFallthroughStmt, parseBlock, parseIfStmt,
-        parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt, parseExprCaseClause,
+        parseLabeledStmt,
+        parseIfStmt, parseSwitchCase,
+        parseSwitchStmt, parseSelectStmt, parseForStmt, parseDeferStmt,
         parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
         parseRangeClause,
-        parseOperand, parseOperandName,
+        parseOperand, 
         parseKeyedElement, parseKey;
 
 #pragma region Common
@@ -1009,7 +1009,7 @@ const AstNode* parse(const string & filename) {
             t = next(f);
         }
         node->signature = parseSignature(t);
-        node->functionBody = parseBlock(t);
+        node->funcBody = parseBlock(t);
 
         return node;
     };
@@ -1024,7 +1024,7 @@ const AstNode* parse(const string & filename) {
         AstSignature* node{};
         if (t.type == OP_LPAREN) {
             node = new AstSignature;
-            node->parameters = parseParam(t);
+            node->param = parseParam(t);
             node->result = parseResult(t);
         }
         return node;
@@ -1288,7 +1288,7 @@ const AstNode* parse(const string & filename) {
         }
         case OP_SHORTAGN: {
             if (lhs->exprList.size() == 0) throw runtime_error("one expr required");
-            auto*stmt = new AstShortAssign;
+            auto*stmt = new AstSAssignStmt;
             for (auto* e : lhs->exprList) {
                 string identName =
                     dynamic_cast<AstName*>(
@@ -1304,7 +1304,7 @@ const AstNode* parse(const string & filename) {
         case OP_ADDAGN:case OP_SUBAGN:case OP_BITORAGN:case OP_BITXORAGN:case OP_MULAGN:case OP_DIVAGN:
         case OP_MODAGN:case OP_LSFTAGN:case OP_RSFTAGN:case OP_BITANDAGN:case OP_ANDXORAGN:case OP_AGN: {
             if (lhs->exprList.size() == 0) throw runtime_error("one expr required");
-            auto* stmt = new AstAssign;
+            auto* stmt = new AstAssignStmt;
             stmt->lhs = lhs;
             stmt->op = t.type;
             t = next(f);
@@ -1319,13 +1319,12 @@ const AstNode* parse(const string & filename) {
         }
         }
     };
-    parseBlock = [&](Token&t)->AstNode* {
-        AstBlock * node{};
+    parseBlock = [&](Token&t)->AstStmtList* {
+        AstStmtList * node{};
         if (t.type == OP_LBRACE) {
-            node = new AstBlock;
             t = next(f);
             if (t.type != OP_RBRACE) {
-                node->stmtList = parseStmtList(t);
+                node = parseStmtList(t);
                 eat(OP_RBRACE, "expect } around code block");
             }
             else {
@@ -1360,61 +1359,35 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    /*auto prelude = [&](TokenType kw, Token&t)->tuple<AstSimpleStmt*, AstExpr*, AstSimpleStmt*> {
-        AstNode * init{}, *cond{}, *post{};
-        if (t.type == OP_LBRACE) {
-            if(kw == KW_if) throw runtime_error("if statement requires condition");
-            return make_tuple(init, cond, post);
-        }
-        init = parseSimpleStmt(nullptr, t);
-        if (t.type == OP_LBRACE) {
-            return 
-        }
-
-    };*/
     parseSwitchStmt = [&](Token&t)->AstNode* {
         eat(KW_switch, "expect keyword switch");
         AstSwitchStmt* node{};
         node = new AstSwitchStmt;
-        if (auto*tmp = parseSimpleStmt(nullptr, t); tmp != nullptr) {
-            node->condition = tmp;
-            expect(OP_SEMI, "expect semicolon in switch condition");
-            if (auto*tmp1 = parseExpr(t); tmp1 != nullptr) {
-                node->conditionExpr = tmp1;
-                t = next(f);
-            }
+        if (t.type != OP_RBRACE) {
+            node->before = parseSimpleStmt(nullptr, t);
+            if (t.type == OP_SEMI) t = next(f); 
+            if (t.type != OP_RBRACE) node->middle = parseSimpleStmt(nullptr, t);
         }
-        expect(OP_LBRACE, "expect left brace around case clauses");
+        eat(OP_LBRACE, "expec { after switch header");
         do {
-            if (auto*tmp = parseExprCaseClause(t); tmp != nullptr) {
-                node->exprCaseClause.push_back(tmp);
+            if (auto*tmp = parseSwitchCase(t); tmp != nullptr) {
+                node->caseList.push_back(tmp);
             }
             t = next(f);
         } while (t.type != OP_RBRACE);
-        
         return node;
     };
-    parseExprCaseClause = [&](Token&t)->AstNode* {
-        AstExprCaseClause* node{};
-        if (auto*tmp = parseExprSwitchCase(t); tmp != nullptr) {
-            node = new AstExprCaseClause;
-            node->exprSwitchCase = tmp;
-            expect(OP_COLON, "expect colon in case clause of switch");
+    parseSwitchCase = [&](Token&t)->AstSwitchCase* {
+        AstSwitchCase* node{};
+        if (t.type == KW_case) {
+            t = next(f);
+            node->exprList = parseExprList(t);
+            eat(OP_COLON, "statements in each case requires colon to separate");
             node->stmtList = parseStmtList(t);
         }
-        return node;
-    };
-    parseExprSwitchCase = [&](Token&t)->AstNode* {
-        AstExprSwitchCase* node{};
-        if (t.type == KW_case) {
-            node = new AstExprSwitchCase;
+        else if (t.type == KW_default) {
             t = next(f);
-            if (auto*tmp = parseExprList(t); tmp != nullptr) {
-                node->exprList = tmp;
-            }
-            else if (t.type == KW_default) {
-                node->isDefault = true;
-            }
+            node->stmtList = parseStmtList(t);
         }
         return node;
     };
@@ -1581,7 +1554,7 @@ const AstNode* parse(const string & filename) {
                     else if (t.type == OP_LPAREN) {
                         t = next(f);
                         if (t.type == KW_type) {
-                            auto* e = new AstTypeSwitchGuardExpr;
+                            auto* e = new AstTypeSwitchExpr;
                             e->operand = tmp;
                             tmp = e;
                             t = next(f);
