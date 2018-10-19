@@ -77,22 +77,8 @@ func switchstmt(p interface{}) {
     default:
 	    printString("don't know the type")     // type of i is type of x (interface{})
     }
-}
 
-func typeAssertion(p interface{}){
-	q:=p.(int)
-	fmt.Print(q)
-}
-
-func div(a,b float64) (float64, error){
-	if b==0{
-		return 0,errors.New("should not divide by zero")
-	}
-	return a/b,nil;
-}
-
-func info(num int8){
-	switch num {
+    switch num {
 	case 1:
 		fmt.Println("into 1st")
 	case 2:
@@ -101,6 +87,35 @@ func info(num int8){
 		fmt.Println("into 3rd")
 	}
 }
+
+func ifstmt2(a,b float64) (float64, error){
+	if b==0{
+		return 0,errors.New("should not divide by zero")
+	}
+	return a/b,nil;
+}
+
+func ifstmt(){
+    if x > max {
+	    x = max
+    }
+    //The expression may be preceded by a simple statement, which executes before the expression is evaluated.
+
+    if x := f(); x < y {
+	    return x
+    } else if x > z {
+	    return z
+    } else {
+	    return y
+    }
+}
+
+func typeAssertion(p interface{}){
+	q:=p.(int)
+	fmt.Print(q)
+}
+
+
 func closure(x int16) (func()func()int16){
 	defer info(1)
 	return func() func()int16{
