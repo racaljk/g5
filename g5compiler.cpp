@@ -28,7 +28,7 @@ string keywords[] = { "break",    "default",     "func",   "interface", "select"
                      "continue", "for",         "import", "return",    "var" };
 
 enum TokenType : signed int {
-    KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case, KW_defer,
+    NONE=0, KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case, KW_defer,
     KW_go, KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package, KW_switch,
     KW_const, KW_fallthrough, KW_if, KW_range, KW_type, KW_continue, KW_for,
     KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDAGN, OP_BITANDAGN,
@@ -191,7 +191,7 @@ struct AstIncDecStmt _ND {
 };
 struct AstAssignStmt _ND {
     AstExprList* lhs{}, *rhs{};
-    TokenType op;
+    TokenType op{};
 };
 struct AstSAssignStmt _ND {//short assign
     vector<string> lhs{};
@@ -203,11 +203,11 @@ struct AstPrimaryExpr _ND {
 };
 struct AstUnaryExpr _ND {
     AstNode*expr;
-    TokenType op;
+    TokenType op{};
 };
 struct AstExpr _ND {
     AstUnaryExpr* lhs;
-    TokenType op;
+    TokenType op{};
     AstExpr* rhs;
 };
 struct AstSelectorExpr _ND {
@@ -242,14 +242,14 @@ struct AstKeyedElement _ND {
     AstNode*key{};
     AstNode*element{};
 };
-struct AstBasicLit _ND { TokenType type; string value; };
+struct AstBasicLit _ND { TokenType type{}; string value; };
 struct AstCompositeLit _ND { AstNode* litName{}; AstLitValue* litValue{}; };
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
 static int line = 1, column = 1, lastToken = -1, shouldEof = 0;
 struct Token {
-    TokenType type; string lexeme;
+    TokenType type{}; string lexeme;
     Token(TokenType a, const string&b) :type(a), lexeme(b) {}
 };
 static struct goruntime {
