@@ -996,7 +996,7 @@ const AstNode* parse(const string & filename) {
     };
     parseFuncDecl = [&](bool anonymous, Token&t)->AstFuncDecl* {
         AstFuncDecl * node = new AstFuncDecl;
-        eat(KW_func, "it should be func declaration");
+        eat(KW_func, "it should be function declaration");
         if (!anonymous) {
             if (t.type == OP_LPAREN) {
                 node->receiver = parseParam(t);
@@ -1251,8 +1251,10 @@ const AstNode* parse(const string & filename) {
             if (t.type == OP_COLON) {
                 //it shall a labeled statement(not part of simple stmt so we handle it here)
                 t = next(f);
-                AstLabeledStmt * labeledStmt = new AstLabeledStmt;
-                labeledStmt->label = "todo";//todo:rewrite it
+                auto* labeledStmt = new AstLabeledStmt;
+                labeledStmt->label = dynamic_cast<AstName*>(
+                    dynamic_cast<AstPrimaryExpr*>(
+                        exprList->exprList[0]->lhs->expr)->expr)->name;
                 labeledStmt->stmt = parseStmt(t);
                 return labeledStmt;
             }

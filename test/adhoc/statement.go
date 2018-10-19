@@ -7,6 +7,10 @@ import (
 	"strconv"
 	"strings"
 )
+func labeledstmt(){
+    Error: log.Panic("error encountered")
+    OK:
+}
 
 func simplestmt(){
     field1, offset := nextField(str, 0)
