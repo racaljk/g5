@@ -61,13 +61,8 @@ struct AstTypeDecl _ND { vector<AstTypeSpec*> typeSpec; };
 struct AstVarDecl _ND { vector<AstNode*> varSpec; };
 struct AstVarSpec _ND {
     AstNode* identList{};
-    union {
-        struct {
-            AstNode* type;
-            AstNode* exprList;
-        }named;
-        AstNode* exprList;
-    }avs{};
+    AstExprList* exprList{};
+    AstType* type{};
 };
 struct AstFuncDecl _ND {
     string funcName;
@@ -989,17 +984,16 @@ const AstNode* parse(const string & filename) {
         if (auto*tmp = parseIdentList(t); tmp != nullptr) {
             node = new AstVarSpec;
             node->identList = tmp;
-            if (auto * tmp1 = parseType(t); tmp1 != nullptr) {
-                node->avs.named.type = tmp1;
+            if(t.type == OP_AGN) {
                 t = next(f);
+                node->exprList = parseExprList(t);
+            }
+            else {
+                node->type = parseType(t);
                 if (t.type == OP_AGN) {
                     t = next(f);
-                    node->avs.named.exprList = parseExprList(t);
+                    node->exprList = parseExprList(t);
                 }
-            }
-            else if (t.type == OP_AGN) {
-                t = next(f);
-                node->avs.exprList = parseExprList(t);
             }
         }
         return node;
