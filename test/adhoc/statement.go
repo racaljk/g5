@@ -9,8 +9,19 @@ import (
 )
 
 func simplestmt(){
-    i &^= 1<<n
+    field1, offset := nextField(str, 0)
+    field2, offset := nextField(str, offset)  // redeclares offset
+    //short assign stmt
+    i, j := 0, 10
+    ch := make(chan int)
+    r, w := os.Pipe(fd)  // os.Pipe() returns two values
+    _, y, _ := coord(p)  
+    a, a := 1, 2   
+    f := func() int { return 7 }
+    a[i] <<= 2
+    (k) = <-ch  
     a[i] = 23
+    i &^= 1<<n
     //expr stmt
     h(x+y)
     f.Close()
@@ -24,29 +35,48 @@ func simplestmt(){
     //assign stmt
     x = 1
     *p = f()
-    
-    (k) = <-ch  
-    a[i] <<= 2
-    x, y = f()
-    //short assign stmt
-    i, j := 0, 10
-    f := func() int { return 7 }
-    ch := make(chan int)
-    r, w := os.Pipe(fd)  // os.Pipe() returns two values
-    _, y, _ := coord(p)  
-    field1, offset := nextField(str, 0)
-    field2, offset := nextField(str, offset)  // redeclares offset
-    a, a := 1, 2                              // illegal: double declaration of a or no new variable if a was declared elsewhere
+    x, y = f()                    
 }
+func switchstmt(p interface{}) {
+	switch tag {
+        default: s3()
+        case 0, 1, 2, 3: s1()
+        case 4, 5, 6, 7: s2()
+    }
 
-func typeChecking(p interface{}) {
-	switch q :=p.(type) {
+    switch q :=p.(type) {
 	case int:
 		fmt.Print("int")
 	case float64:
 		fmt.Print(q)
 		fmt.Printf("float64")
 	}
+
+
+    switch x := f(); {  // missing switch expression means "true"
+    case x < 0: return -x
+    default: return x
+    }
+
+    switch {
+    case x < y: f1()
+    case x < z: f2()
+    case x == 4: f3()
+    }
+    switch i := x.(type) {
+    case nil:
+	    printString("x is nil")                // type of i is type of x (interface{})
+    case int:
+	    printInt(i)                            // type of i is int
+    case float64:
+	    printFloat64(i)                        // type of i is float64
+    case func(int) float64:
+	    printFunction(i)                       // type of i is func(int) float64
+    case bool, string:
+	    printString("type is bool or string")  // type of i is type of x (interface{})
+    default:
+	    printString("don't know the type")     // type of i is type of x (interface{})
+    }
 }
 
 func typeAssertion(p interface{}){

@@ -551,6 +551,7 @@ skip_comment_and_find_next:
     case '=':  //=  ==
         lexeme += consumePeek(c);
         if (c == '=') {
+            lexeme += consumePeek(c);
             lastToken = OP_EQ;
             return Token(OP_EQ, lexeme);
         }
@@ -845,8 +846,9 @@ const AstNode* parse(const string & filename) {
             case KW_type:node->typeDecl.push_back(parseTypeDecl(t)); break;
             case KW_var:node->varDecl.push_back(parseVarDecl(t)); break;
             case KW_func:node->funcDecl.push_back(parseFuncDecl(false, t)); break;
+            case OP_SEMI:t = next(f); break;
+            default:throw runtime_error("unknown top level declaration");
             }
-            eatOptionalSemi();
         }
         return node;
     };
@@ -1363,30 +1365,33 @@ const AstNode* parse(const string & filename) {
         eat(KW_switch, "expect keyword switch");
         AstSwitchStmt* node{};
         node = new AstSwitchStmt;
-        if (t.type != OP_RBRACE) {
+        if (t.type != OP_LBRACE) {
             node->before = parseSimpleStmt(nullptr, t);
             if (t.type == OP_SEMI) t = next(f); 
-            if (t.type != OP_RBRACE) node->middle = parseSimpleStmt(nullptr, t);
+            if (t.type != OP_LBRACE) node->middle = parseSimpleStmt(nullptr, t);
         }
         eat(OP_LBRACE, "expec { after switch header");
         do {
             if (auto*tmp = parseSwitchCase(t); tmp != nullptr) {
                 node->caseList.push_back(tmp);
             }
-            t = next(f);
         } while (t.type != OP_RBRACE);
+        t = next(f);
         return node;
     };
     parseSwitchCase = [&](Token&t)->AstSwitchCase* {
         AstSwitchCase* node{};
         if (t.type == KW_case) {
+            node = new AstSwitchCase;
             t = next(f);
             node->exprList = parseExprList(t);
             eat(OP_COLON, "statements in each case requires colon to separate");
             node->stmtList = parseStmtList(t);
         }
         else if (t.type == KW_default) {
+            node = new AstSwitchCase;
             t = next(f);
+            eat(OP_COLON, "expect : after default label");
             node->stmtList = parseStmtList(t);
         }
         return node;
@@ -1614,7 +1619,7 @@ const AstNode* parse(const string & filename) {
                 }
                 else if (t.type == OP_LBRACE) {
                     // only operand has literal value, otherwise, treats it as a block
-                    if (typeid(*tmp) != typeid(AstName) && typeid(*tmp) != typeid(AstBasicLit) &&
+                    if (/*typeid(*tmp) != typeid(AstName) && */typeid(*tmp) != typeid(AstBasicLit) &&
                         typeid(*tmp) != typeid(AstType) && typeid(*tmp) != typeid(AstFuncDecl)) {
                         break;
                     }
