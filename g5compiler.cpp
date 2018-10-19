@@ -752,6 +752,7 @@ const AstNode* parse(const string & filename) {
         if (t.type != tk) throw runtime_error(msg);
         t = next(f);
     };
+    auto eatOptionalSemi = [&]() { if (t.type == OP_SEMI) t = next(f); };
 
     auto expect = [&f, &t](TokenType tk, const string& msg) {
         t = next(f);
@@ -766,7 +767,7 @@ const AstNode* parse(const string & filename) {
     function<AstNode*(AstExprList *, Token&)> parseSimpleStmt;
 
     function<AstNode*(Token&)> parseTypeAssertion,
-        parseArrayOrSliceType, parseStructType, parsePointerType, parseFunctionType,
+        parseArrayOrSliceType, parseStructType, parsePointerType, parseFuncType,
         parseParam, parseParamDecl, parseResult, parseInterfaceType,
         parseMethodName, parseMapType, parseChannelType,
         parseVarSpec, parseStmt,
@@ -830,7 +831,7 @@ const AstNode* parse(const string & filename) {
                 node = new AstStmtList;
             }
             node->stmtList.push_back(tmp);
-            if (t.type == OP_SEMI) t = next(f);
+            eatOptionalSemi();
         }
         return node;
     };
@@ -850,9 +851,7 @@ const AstNode* parse(const string & filename) {
             case KW_var:node->varDecl.push_back(parseVarDecl(t)); break;
             case KW_func:node->funcDecl.push_back(parseFuncDecl(false, t)); break;
             }
-            if (t.type == OP_SEMI) {
-                t = next(f);
-            }
+            eatOptionalSemi();
         }
         return node;
     };
@@ -874,9 +873,7 @@ const AstNode* parse(const string & filename) {
                 importName = importName.substr(1, importName.length() - 2);
                 node->imports[importName] = alias;
                 t = next(f);
-                if (t.type == OP_SEMI) {
-                    t = next(f);
-                }
+                eatOptionalSemi();
             } while (t.type != OP_RPAREN);
             eat(OP_RPAREN, "expect )");
         }
@@ -917,9 +914,7 @@ const AstNode* parse(const string & filename) {
                 else {
                     node->exprList.push_back(nullptr);
                 }
-                if (t.type == OP_SEMI) {
-                    t = next(f);
-                }
+                eatOptionalSemi();
             } while (t.type != OP_RPAREN);
             eat(OP_RPAREN, "eat right parenthesis");
         }
@@ -939,10 +934,7 @@ const AstNode* parse(const string & filename) {
             else {
                 node->exprList.push_back(nullptr);
             }
-            if (t.type != OP_SEMI) {
-
-                throw runtime_error("expect an explicit semicolon");
-            }
+            if (t.type != OP_SEMI) throw runtime_error("expect an explicit semicolon");
         }
 
         return node;
@@ -954,9 +946,7 @@ const AstNode* parse(const string & filename) {
             t = next(f);
             do {
                 node->typeSpec.push_back(parseTypeSpec(t));
-                if (t.type == OP_SEMI) {
-                    t = next(f);
-                }
+                eatOptionalSemi();
             } while (t.type != OP_RPAREN);
             eat(OP_RPAREN, "expect )");
         }
@@ -1029,13 +1019,11 @@ const AstNode* parse(const string & filename) {
 
         return node;
     };
-    parseFunctionType = [&](Token&t)->AstNode* {
+    parseFuncType = [&](Token&t)->AstNode* {
         AstFuncType* node{};
-        if (t.type == KW_func) {
-            node = new AstFuncType;
-            t = next(f);
-            node->signature = parseSignature(t);
-        }
+        node = new AstFuncType;
+        t = next(f);
+        node->signature = parseSignature(t);
         return node;
     };
     parseSignature = [&](Token&t)->AstSignature* {
@@ -1124,13 +1112,12 @@ const AstNode* parse(const string & filename) {
         case OP_LBRACKET: node = new AstType; node->type = parseArrayOrSliceType(t); break;
         case KW_struct:   node = new AstType; node->type = parseStructType(t); break;
         case OP_MUL:      node = new AstType; node->type = parsePointerType(t); break;
-        case KW_func:     node = new AstType; node->type = parseFunctionType(t); break;
+        case KW_func:     node = new AstType; node->type = parseFuncType(t); break;
         case KW_interface:node = new AstType; node->type = parseInterfaceType(t); break;
         case KW_map:      node = new AstType; node->type = parseMapType(t); break;
         case KW_chan:     node = new AstType; node->type = parseChannelType(t); break;
         case OP_LPAREN:   t = next(f); node = parseType(t); t = next(f); break;
         }
-
         return node;
     };
     parseArrayOrSliceType = [&](Token&t)->AstNode* {
@@ -1144,8 +1131,7 @@ const AstNode* parse(const string & filename) {
             }
             else {
                 dynamic_cast<AstArrayType*>(node)->length = parseExpr(t);
-            }
-            
+            }    
             t = next(f);
             dynamic_cast<AstArrayType*>(node)->elemType = parseType(t);
         }
@@ -1178,13 +1164,10 @@ const AstNode* parse(const string & filename) {
                 get<2>(field) = t.lexeme;
             }
             node->fields.push_back(field);
-            if (t.type == OP_SEMI) {
-                t = next(f);
-            }
+            eatOptionalSemi();
         } while (t.type != OP_RBRACE);
         eat(OP_RBRACE, "expect }");
         eat(OP_SEMI, "expect ;");
-
         return node;
     };
     parsePointerType = [&](Token&t)->AstNode* {
@@ -1200,9 +1183,7 @@ const AstNode* parse(const string & filename) {
         while (t.type != OP_RBRACE) {
             if (auto*tmp = parseMethodSpec(t); tmp != nullptr) {
                 node->methodSpec.push_back(tmp);
-                if (t.type == OP_SEMI) {
-                    t = next(f);
-                }
+                eatOptionalSemi();
             }
         }
         t = next(f);
@@ -1270,7 +1251,7 @@ const AstNode* parse(const string & filename) {
         case KW_select:     return parseSelectStmt(t);
         case KW_for:        return parseForStmt(t);
         case OP_LBRACE:     return parseBlock(t);
-        case OP_SEMI:       /*return nothing;*/
+        case OP_SEMI:       return nullptr;
 
         case OP_ADD:case OP_SUB:case OP_NOT:case OP_XOR:case OP_MUL:case OP_CHAN:
         case LIT_STR:case LIT_INT:case LIT_IMG:case LIT_FLOAT:case LIT_RUNE:
@@ -1278,7 +1259,6 @@ const AstNode* parse(const string & filename) {
         case KW_struct:case KW_map:case OP_LBRACKET:case TK_ID: case OP_LPAREN:
         {
             auto* exprList = parseExprList(t);
-
             if (t.type == OP_COLON) {
                 //it shall a labeled statement(not part of simple stmt so we handle it here)
                 t = next(f);
@@ -1287,18 +1267,13 @@ const AstNode* parse(const string & filename) {
                 labeledStmt->stmt = parseStmt(t);
                 return labeledStmt;
             }
-            else {
-                return parseSimpleStmt(exprList, t);
-            }
-
+            else return parseSimpleStmt(exprList, t);
         }
         }
         return nullptr;
     };
     parseSimpleStmt = [&](AstExprList* lhs, Token&t)->AstNode* {
-        if (lhs == nullptr) {
-            lhs = parseExprList(t);
-        }
+        if (lhs == nullptr) lhs = parseExprList(t);
 
         switch (t.type) {
         case OP_CHAN: {
@@ -1386,9 +1361,7 @@ const AstNode* parse(const string & filename) {
                 else if (auto *tmp1 = parseBlock(t); tmp1 != nullptr) {
                     node->ais.block = tmp1;
                 }
-                else {
-                    throw runtime_error("else is empty");
-                }
+                else throw runtime_error("else is empty");
             }
         }
         return node;
@@ -1673,7 +1646,7 @@ const AstNode* parse(const string & filename) {
                     tmp = e;
                 }
                 else if (t.type == OP_LBRACE) {
-                    // only operand has literal value 
+                    // only operand has literal value, otherwise, treats it as a block
                     if (typeid(*tmp) != typeid(AstName) && typeid(*tmp) != typeid(AstBasicLit) &&
                         typeid(*tmp) != typeid(AstType) && typeid(*tmp) != typeid(AstFuncDecl)) {
                         break;
@@ -1740,29 +1713,17 @@ const AstNode* parse(const string & filename) {
             if (t.type == OP_COLON) {
                 node->key = tmp;
                 t = next(f);
-                if (auto*tmp1 = parseExpr(t); tmp1 != nullptr) {
-                    node->element = tmp1;
-                }
-                else if (auto*tmp1 = parseLitValue(t); tmp1 != nullptr) {
-                    node->element = tmp1;
-                }
-                else {
-                    node->element = nullptr;
-                }
+                if (auto*tmp1 = parseExpr(t); tmp1 != nullptr)          node->element = tmp1;
+                else if (auto*tmp1 = parseLitValue(t); tmp1 != nullptr) node->element = tmp1;
+                else node->element = nullptr;
             }
         }
         return node;
     };
     parseKey = [&](Token&t)->AstNode* {
-        if (t.type == TK_ID) {
-            return parseName(false, t);
-        }
-        else if (auto*tmp = parseLitValue(t); tmp != nullptr) {
-            return tmp;
-        }
-        else if (auto*tmp = parseExpr(t); tmp != nullptr) {
-            return tmp;
-        }
+        if (t.type == TK_ID) return parseName(false, t);
+        else if (auto*tmp = parseLitValue(t); tmp != nullptr)return tmp;
+        else if (auto*tmp = parseExpr(t); tmp != nullptr) return tmp;
         return nullptr;
     };
 #pragma endregion
