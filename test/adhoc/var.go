@@ -1,5 +1,10 @@
 package main
-
+var blockJump = [...]struct {
+	asm, invasm obj.As
+}{
+	ssa.Block386EQ:  {x86.AJEQ, x86.AJNE},
+	ssa.Block386NE:  {x86.AJNE, x86.AJEQ},
+}
 // HTML entities that are two unicode codepoints.
 var entity2 map[string][2]rune
 

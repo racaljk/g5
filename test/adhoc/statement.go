@@ -41,6 +41,15 @@ func selectstmt(){
 }
 
 func forstmt(){
+	for ; i < len(s); i++ {
+		if special(s[i]) {
+			b[j] = '\\'
+			j++
+		}
+		b[j] = s[i]
+		j++
+	}
+
     for i, _ := range testdata.a {
 	    // testdata.a is never evaluated; len(testdata.a) is constant
 	    // i ranges from 0 to 6

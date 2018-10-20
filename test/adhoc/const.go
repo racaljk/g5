@@ -1,6 +1,6 @@
 package main
 
-
+const endOfText rune = -1
 // The result of Scan is one of these tokens or a Unicode character.
 const (
 	EOF = -(iota + 1)

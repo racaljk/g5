@@ -21,7 +21,7 @@ using namespace std;
 // various declarations 
 //===----------------------------------------------------------------------===//
 enum TokenType : signed int {
-    KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case,
+    INVALID = 0, KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case,
     KW_defer, KW_go, KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package,
     KW_switch, KW_const, KW_fallthrough, KW_if, KW_range, KW_type, KW_continue,
     KW_for, KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDAGN, OP_BITANDAGN,
@@ -31,7 +31,7 @@ enum TokenType : signed int {
     OP_DIV, OP_LSHIFT, OP_DIVAGN, OP_LSFTAGN, OP_INC, OP_AGN, OP_SHORTAGN,
     OP_COMMA, OP_SEMI, OP_MOD, OP_RSHIFT, OP_MODAGN, OP_RSFTAGN, OP_DEC,
     OP_NOT, OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORAGN, TK_ID,
-    LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR, TK_EOF = -1, INVALID = 0
+    LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR, TK_EOF = -1,
 };
 //todo: add destructor for these structures
 // Common
@@ -220,7 +220,7 @@ string keywords[] = { "break",    "default",     "func",   "interface", "select"
                      "chan",     "else",        "goto",   "package",   "switch",
                      "const",    "fallthrough", "if",     "range",     "type",
                      "continue", "for",         "import", "return",    "var" };
-static int line = 1, column = 1, lastToken = -1, shouldEof = 0;
+static int line = 1, column = 1, lastToken = -1, shouldEof = 0, nestLev = 0;
 struct Token { TokenType type{}; string lexeme; };
 static struct goruntime {
     string package;
@@ -280,8 +280,8 @@ skip_comment_and_find_next:
 
         for (int i = 0; i < sizeof(keywords) / sizeof(keywords[0]); i++)
             if (keywords[i] == lexeme) {
-                lastToken = static_cast<TokenType>(i);
-                return Token{static_cast<TokenType>(i), lexeme};
+                lastToken = static_cast<TokenType>(i + 1);
+                return Token{ static_cast<TokenType>(i + 1), lexeme };
             }
         lastToken = TK_ID;
         return Token{TK_ID, lexeme};
@@ -883,7 +883,6 @@ const AstNode* parse(const string & filename) {
             node->identList.push_back(parseIdentList(t));
             if (auto*tmp = parseType(t); tmp != nullptr) {
                 node->type.push_back(tmp);
-                t = next(f);
             }
             else {
                 node->type.push_back(nullptr);
@@ -975,8 +974,9 @@ const AstNode* parse(const string & filename) {
             t = next(f);
         }
         node->signature = parseSignature(t);
+        nestLev++;
         node->funcBody = parseBlock(t);
-
+        nestLev--;
         return node;
     };
     parseFuncType = [&](Token&t)->AstNode* {
@@ -1082,6 +1082,7 @@ const AstNode* parse(const string & filename) {
     parseArrayOrSliceType = [&](Token&t)->AstNode* {
         AstNode* node{};
         eat(OP_LBRACKET, "array/slice type requires [ to denote that");
+        nestLev++;
         if (t.type != OP_RBRACKET) {
             node = new AstArrayType;
             if (t.type == OP_VARIADIC) {
@@ -1090,12 +1091,14 @@ const AstNode* parse(const string & filename) {
             }
             else {
                 dynamic_cast<AstArrayType*>(node)->length = parseExpr(t);
-            }    
+            } 
+            nestLev--;
             t = next(f);
             dynamic_cast<AstArrayType*>(node)->elemType = parseType(t);
         }
         else {
             node = new AstSliceType;
+            nestLev--;
             t = next(f);
             dynamic_cast<AstSliceType*>(node)->elemType = parseType(t);
         }
@@ -1126,7 +1129,7 @@ const AstNode* parse(const string & filename) {
             eatOptionalSemi();
         } while (t.type != OP_RBRACE);
         eat(OP_RBRACE, "expect }");
-        eat(OP_SEMI, "expect ;");
+        eatOptionalSemi();
         return node;
     };
     parsePtrType = [&](Token&t)->AstNode* {
@@ -1331,6 +1334,8 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseIfStmt = [&](Token&t)->AstIfStmt* {
+        const int outLev = nestLev;
+        nestLev = -1;
         eat(KW_if, "expect keyword if");
         AstIfStmt* node = new AstIfStmt;
         if (t.type == OP_LBRACE) throw runtime_error("if statement requires a condition");
@@ -1354,10 +1359,12 @@ const AstNode* parse(const string & filename) {
             }
             else throw runtime_error("only else-if or else could place here");
         }
-        
+        nestLev = outLev;
         return node;
     };
     parseSwitchStmt = [&](Token&t)->AstSwitchStmt* {
+        const int outLev = nestLev;
+        nestLev = -1;
         eat(KW_switch, "expect keyword switch");
         AstSwitchStmt* node = new AstSwitchStmt;
         if (t.type != OP_LBRACE) {
@@ -1372,6 +1379,7 @@ const AstNode* parse(const string & filename) {
             }
         } while (t.type != OP_RBRACE);
         t = next(f);
+        nestLev = outLev;
         return node;
     };
     parseSwitchCase = [&](Token&t)->AstSwitchCase* {
@@ -1392,6 +1400,8 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseSelectStmt = [&](Token&t)->AstNode* {
+        const int outLev = nestLev;
+        nestLev = -1;
         eat(KW_select, "expect keyword select");
         eat(OP_LBRACE, "expect { after select keyword");
         auto* node = new AstSelectStmt;
@@ -1401,6 +1411,7 @@ const AstNode* parse(const string & filename) {
             }
         } while (t.type != OP_RBRACE);
         t = next(f);
+        nestLev = outLev;
         return node;
     };
     parseSelectCase = [&](Token&t)->AstSelectCase* {
@@ -1421,24 +1432,40 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseForStmt = [&](Token&t)->AstNode* {
+        const int outLev = nestLev;
+        nestLev = -1;
         eat(KW_for, "expect keyword for");
         auto* node = new AstForStmt;
         if (t.type != OP_LBRACE) {
-            auto*tmp = parseSimpleStmt(nullptr, t);
-            switch (t.type) {
-            case OP_LBRACE:node->cond = tmp;
-                break;
-            case OP_SEMI:
-                node->init = tmp;
-                eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
+            if (t.type != OP_SEMI) {
+                auto*tmp = parseSimpleStmt(nullptr, t);
+                switch (t.type) {
+                case OP_LBRACE:
+                    node->cond = tmp;
+                    if (typeid(*tmp) == typeid(AstSRangeClause) || typeid(*tmp) == typeid(AstRangeClause))
+                        nestLev = outLev;
+                    break;
+                case OP_SEMI:
+                    node->init = tmp;
+                    eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
+                    node->cond = parseExpr(t);
+                    eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
+                    if (t.type != OP_LBRACE)node->post = parseSimpleStmt(nullptr, t);  
+                    break;
+                default:throw runtime_error("expect {/;/range/:=/=");
+                }
+            }
+            else {
+                // for ;cond;post{}
+                t = next(f);
+                node->init = nullptr;
                 node->cond = parseExpr(t);
                 eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
-                node->post = parseSimpleStmt(nullptr, t);
-                break;
-            default:throw runtime_error("expect {/;/range/:=/=");
+                if (t.type != OP_LBRACE)node->post = parseSimpleStmt(nullptr, t);
             }
         }
         node->block = parseBlock(t);
+        nestLev = outLev;
         return node;
     };
 #pragma endregion
@@ -1468,10 +1495,14 @@ const AstNode* parse(const string & filename) {
             t = next(f);
             node->expr = parseUnaryExpr(t);
             break;
-        default:
+        case TK_ID:
+        case LIT_INT:case LIT_FLOAT:case LIT_IMG:case LIT_RUNE:case LIT_STR:
+        case KW_struct:case KW_map:case OP_LBRACKET:case KW_chan:
+        case KW_interface:case KW_func:case OP_LPAREN:
             node = new AstUnaryExpr;
             node->expr = parsePrimaryExpr(t);
             break;
+        default:break;
         }
         return node;
     };
@@ -1509,6 +1540,7 @@ const AstNode* parse(const string & filename) {
                     }
                 }
                 else if (t.type == OP_LBRACKET) {
+                    nestLev++;
                     t = next(f);
                     AstNode* start = nullptr;//Ignore start if next token is :(syntax of operand[:xxx])
                     if (t.type != OP_COLON) {
@@ -1519,6 +1551,7 @@ const AstNode* parse(const string & filename) {
                             e->index = start;
                             tmp = e;
                             t = next(f);
+                            nestLev--;
                             continue;
                         }
                     }
@@ -1536,11 +1569,13 @@ const AstNode* parse(const string & filename) {
                         t = next(f);
                     }
                     tmp = e;
+                    nestLev--;
                 }
                 else if (t.type == OP_LPAREN) {
                     t = next(f);
                     auto* e = new AstCallExpr;
                     e->operand = tmp;
+                    nestLev++;
                     if (auto*tmp1 = parseExprList(t); tmp1 != nullptr) {
                         e->arguments = tmp1;
                     }
@@ -1548,26 +1583,26 @@ const AstNode* parse(const string & filename) {
                         e->isVariadic = true;
                         t = next(f);
                     }
+                    nestLev--;
                     eat(OP_RPAREN, "() must match in call expr");
                     tmp = e;
                 }
                 else if (t.type == OP_LBRACE) {
+          
                     // only operand has literal value, otherwise, treats it as a block
-                    if (/*typeid(*tmp) != typeid(AstName) && 
-                        typeid(*tmp) != typeid(AstSelectorExpr) && */
-                        typeid(*tmp) != typeid(AstArrayType) &&
-                        typeid(*tmp) != typeid(AstSliceType) &&
-                        typeid(*tmp) != typeid(AstStructType) &&
-                        typeid(*tmp) != typeid(AstMapType)) {
+                    if (typeid(*tmp) == typeid(AstArrayType) ||typeid(*tmp) == typeid(AstSliceType) ||
+                        typeid(*tmp) == typeid(AstStructType) ||typeid(*tmp) == typeid(AstMapType) ||
+                        ((typeid(*tmp) == typeid(AstName) || typeid(*tmp) == typeid(AstSelectorExpr)) && nestLev >= 0)) {
+                        // it's somewhat curious since official implementation treats literal type
+                        // and literal value as separate parts
+                        auto* e = new AstCompositeLit;
+                        e->litName = tmp;
+                        e->litValue = parseLitValue(t);
+                        tmp = e;
+                    }
+                    else {
                         break;
                     }
-
-                    // it's somewhat curious since official implementation treats literal type
-                    // and literal value as separate parts
-                    auto* e = new AstCompositeLit;
-                    e->litName = tmp;
-                    e->litValue = parseLitValue(t);
-                    tmp = e;
                 }
                 else {
                     break;
@@ -1589,7 +1624,7 @@ const AstNode* parse(const string & filename) {
         case KW_func:
             return parseFuncDecl(true, t);
         case OP_LPAREN: {
-            t = next(f); auto* e = parseExpr(t); eat(OP_RPAREN, "expect )"); return e;
+            t = next(f); nestLev++; auto* e = parseExpr(t); nestLev--; eat(OP_RPAREN, "expect )"); return e;
         }
         default:return nullptr;
         }
@@ -1605,6 +1640,7 @@ const AstNode* parse(const string & filename) {
     parseLitValue = [&](Token&t)->AstLitValue* {
         AstLitValue*node{};
         if (t.type == OP_LBRACE) {
+            nestLev++;
             node = new AstLitValue;
             do {
                 t = next(f);
@@ -1612,6 +1648,7 @@ const AstNode* parse(const string & filename) {
                 node->keyedElement.push_back(parseKeyedElement(t));
             } while (t.type != OP_RBRACE);
             eat(OP_RBRACE, "brace {} must match");
+            nestLev--;
         }
         return node;
     };
