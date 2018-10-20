@@ -17,28 +17,21 @@
 #define _ND :public AstNode
 using namespace std;
 
-
 //===----------------------------------------------------------------------===//
 // various declarations 
 //===----------------------------------------------------------------------===//
-string keywords[] = { "break",    "default",     "func",   "interface", "select",
-                     "case",     "defer",       "go",     "map",       "struct",
-                     "chan",     "else",        "goto",   "package",   "switch",
-                     "const",    "fallthrough", "if",     "range",     "type",
-                     "continue", "for",         "import", "return",    "var" };
-
 enum TokenType : signed int {
-    NONE=0, KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case, KW_defer,
-    KW_go, KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package, KW_switch,
-    KW_const, KW_fallthrough, KW_if, KW_range, KW_type, KW_continue, KW_for,
-    KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDAGN, OP_BITANDAGN,
+    KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case,
+    KW_defer, KW_go, KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package,
+    KW_switch, KW_const, KW_fallthrough, KW_if, KW_range, KW_type, KW_continue,
+    KW_for, KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDAGN, OP_BITANDAGN,
     OP_AND, OP_EQ, OP_NE, OP_LPAREN, OP_RPAREN, OP_SUB, OP_BITOR, OP_SUBAGN,
     OP_BITORAGN, OP_OR, OP_LT, OP_LE, OP_LBRACKET, OP_RBRACKET, OP_MUL, OP_XOR,
     OP_MULAGN, OP_BITXORAGN, OP_CHAN, OP_GT, OP_GE, OP_LBRACE, OP_RBRACE,
     OP_DIV, OP_LSHIFT, OP_DIVAGN, OP_LSFTAGN, OP_INC, OP_AGN, OP_SHORTAGN,
     OP_COMMA, OP_SEMI, OP_MOD, OP_RSHIFT, OP_MODAGN, OP_RSFTAGN, OP_DEC,
     OP_NOT, OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORAGN, TK_ID,
-    LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR, TK_EOF = -1
+    LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR, TK_EOF = -1, INVALID = 0
 };
 //todo: add destructor for these structures
 // Common
@@ -247,11 +240,13 @@ struct AstCompositeLit _ND { AstNode* litName{}; AstLitValue* litValue{}; };
 //===----------------------------------------------------------------------===//
 // global data
 //===----------------------------------------------------------------------===//
+string keywords[] = { "break",    "default",     "func",   "interface", "select",
+                     "case",     "defer",       "go",     "map",       "struct",
+                     "chan",     "else",        "goto",   "package",   "switch",
+                     "const",    "fallthrough", "if",     "range",     "type",
+                     "continue", "for",         "import", "return",    "var" };
 static int line = 1, column = 1, lastToken = -1, shouldEof = 0;
-struct Token {
-    TokenType type{}; string lexeme;
-    Token(TokenType a, const string&b) :type(a), lexeme(b) {}
-};
+struct Token { TokenType type{}; string lexeme; };
 static struct goruntime {
     string package;
 } grt;
@@ -284,7 +279,7 @@ skip_comment_and_find_next:
                 || lastToken == OP_RBRACKET || lastToken == OP_RBRACE) {
                 consumePeek(c);
                 lastToken = OP_SEMI;
-                return Token(OP_SEMI, ";");
+                return Token{ OP_SEMI, ";" };
             }
         }
         consumePeek(c);
@@ -292,11 +287,11 @@ skip_comment_and_find_next:
     if (f.eof()) {
         if (shouldEof) {
             lastToken = TK_EOF;
-            return Token(TK_EOF, "");
+            return Token{TK_EOF, ""};
         }
         shouldEof = 1;
         lastToken = OP_SEMI;
-        return Token(OP_SEMI, ";");
+        return Token{OP_SEMI, ";"};
     }
 
     string lexeme;
@@ -311,10 +306,10 @@ skip_comment_and_find_next:
         for (int i = 0; i < sizeof(keywords) / sizeof(keywords[0]); i++)
             if (keywords[i] == lexeme) {
                 lastToken = static_cast<TokenType>(i);
-                return Token(static_cast<TokenType>(i), lexeme);
+                return Token{static_cast<TokenType>(i), lexeme};
             }
         lastToken = TK_ID;
-        return Token(TK_ID, lexeme);
+        return Token{TK_ID, lexeme};
     }
 
     // int_lit     = decimal_lit | octal_lit | hex_lit .
@@ -337,7 +332,7 @@ skip_comment_and_find_next:
                     lexeme += consumePeek(c);
                 } while (isdigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F');
                 lastToken = LIT_INT;
-                return Token(LIT_INT, lexeme);
+                return Token{LIT_INT, lexeme};
             }
             else if ((c >= '0' && c <= '9') ||
                 (c == '.' || c == 'e' || c == 'E' || c == 'i')) {
@@ -351,7 +346,7 @@ skip_comment_and_find_next:
                     }
                 }
                 lastToken = LIT_INT;
-                return Token(LIT_INT, lexeme);
+                return Token{LIT_INT, lexeme};
             }
             goto may_float;
         }
@@ -365,7 +360,7 @@ skip_comment_and_find_next:
                     if (c == '.') {
                         lexeme += consumePeek(c);
                         lastToken = OP_VARIADIC;
-                        return Token(OP_VARIADIC, lexeme);
+                        return Token{OP_VARIADIC, lexeme};
                     }
                     else {
                         throw runtime_error(
@@ -377,7 +372,7 @@ skip_comment_and_find_next:
                 }
                 else {
                     lastToken = OP_DOT;
-                    return Token(OP_DOT, ".");
+                    return Token{OP_DOT, "."};
                 }
                 goto shall_float;
             }
@@ -408,15 +403,15 @@ skip_comment_and_find_next:
                         column++;
                         lexeme += c;
                         lastToken = LIT_IMG;
-                        return Token(LIT_IMG, lexeme);
+                        return Token{LIT_IMG, lexeme};
                     }
                 }
                 lastToken = type;
-                return Token(type, lexeme);
+                return Token{type, lexeme};
             }
             else {
                 lastToken = type;
-                return Token(type, lexeme);
+                return Token{type, lexeme};
             }
         }
     }
@@ -468,7 +463,7 @@ skip_comment_and_find_next:
         }
         lexeme += consumePeek(c);
         lastToken = LIT_RUNE;
-        return Token(LIT_RUNE, lexeme);
+        return Token{LIT_RUNE, lexeme};
     }
 
     // string_lit             = raw_string_lit | interpreted_string_lit .
@@ -485,7 +480,7 @@ skip_comment_and_find_next:
         }
         lexeme += consumePeek(c);
         lastToken = LIT_STR;
-        return Token(LIT_STR, lexeme);
+        return Token{LIT_STR, lexeme};
     }
     else if (c == '"') {
         do {
@@ -501,7 +496,7 @@ skip_comment_and_find_next:
         }
         lexeme += consumePeek(c);
         lastToken = LIT_STR;
-        return Token(LIT_STR, lexeme);
+        return Token{LIT_STR, lexeme};
     }
 
     // operators
@@ -511,173 +506,176 @@ skip_comment_and_find_next:
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_ADDAGN;
-            return Token(OP_ADDAGN, lexeme);
+            return Token{OP_ADDAGN, lexeme};
         }
         else if (c == '+') {
             lexeme += consumePeek(c);
             lastToken = OP_INC;
-            return Token(OP_INC, lexeme);
+            return Token{OP_INC, lexeme};
         }
-        return Token(OP_ADD, lexeme);
+        return Token{OP_ADD, lexeme};
     case '&':  //&  &=  &&  &^  &^=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_BITANDAGN;
-            return Token(OP_BITANDAGN, lexeme);
+            return Token{OP_BITANDAGN, lexeme};
         }
         else if (c == '&') {
             lexeme += consumePeek(c);
             lastToken = OP_AND;
-            return Token(OP_AND, lexeme);
+            return Token{OP_AND, lexeme};
         }
         else if (c == '^') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
                 lastToken = OP_ANDXORAGN;
-                return Token(OP_ANDXORAGN, lexeme);
+                return Token{OP_ANDXORAGN, lexeme};
             }
             lastToken = OP_ANDXOR;
-            return Token(OP_ANDXOR, lexeme);
+            return Token{OP_ANDXOR, lexeme};
         }
         lastToken = OP_BITAND;
-        return Token(OP_BITAND, lexeme);
+        return Token{OP_BITAND, lexeme};
     case '=':  //=  ==
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_EQ;
-            return Token(OP_EQ, lexeme);
+            return Token{OP_EQ, lexeme};
         }
         lastToken = OP_AGN;
-        return Token(OP_AGN, lexeme);
+        return Token{OP_AGN, lexeme};
     case '!':  //!  !=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_NE;
-            return Token(OP_NE, lexeme);
+            return Token{OP_NE, lexeme};
         }
         lastToken = OP_NOT;
-        return Token(OP_NOT, lexeme);
+        return Token{OP_NOT, lexeme};
     case '(':
         lexeme += consumePeek(c);
         lastToken = OP_LPAREN;
-        return Token(OP_LPAREN, lexeme);
+        return Token{OP_LPAREN, lexeme};
     case ')':
         lexeme += consumePeek(c);
         lastToken = OP_RPAREN;
-        return Token(OP_RPAREN, lexeme);
+        return Token{OP_RPAREN, lexeme};
     case '-':  //-  -= --
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_SUBAGN;
-            return Token(OP_SUBAGN, lexeme);
+            return Token{OP_SUBAGN, lexeme};
         }
         else if (c == '-') {
             lexeme += consumePeek(c);
             lastToken = OP_DEC;
-            return Token(OP_DEC, lexeme);
+            return Token{OP_DEC, lexeme};
         }
         lastToken = OP_SUB;
-        return Token(OP_SUB, lexeme);
+        return Token{OP_SUB, lexeme};
     case '|':  //|  |=  ||
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_BITORAGN;
-            return Token(OP_BITORAGN, lexeme);
+            return Token{OP_BITORAGN, lexeme};
         }
         else if (c == '|') {
             lexeme += consumePeek(c);
             lastToken = OP_OR;
-            return Token(OP_OR, lexeme);
+            return Token{OP_OR, lexeme};
         }
         lastToken = OP_BITOR;
-        return Token(OP_BITOR, lexeme);
+        return Token{OP_BITOR, lexeme};
     case '<':  //<  <=  <- <<  <<=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_LE;
-            return Token(OP_LE, lexeme);
+            return Token{OP_LE, lexeme};
         }
         else if (c == '-') {
             lexeme += consumePeek(c);
             lastToken = OP_CHAN;
-            return Token(OP_CHAN, lexeme);
+            return Token{OP_CHAN, lexeme};
         }
         else if (c == '<') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
                 lastToken = OP_LSFTAGN;
-                return Token(OP_LSFTAGN, lexeme);
+                return Token{OP_LSFTAGN, lexeme};
             }
             lastToken = OP_LSHIFT;
-            return Token(OP_LSHIFT, lexeme);
+            return Token{OP_LSHIFT, lexeme};
         }
         lastToken = OP_LT;
-        return Token(OP_LT, lexeme);
+        return Token{OP_LT, lexeme};
     case '[':
         lexeme += consumePeek(c);
         lastToken = OP_LBRACKET;
-        return Token(OP_LBRACKET, lexeme);
+        return Token{OP_LBRACKET, lexeme};
     case ']':
         lexeme += consumePeek(c);
         lastToken = OP_RBRACKET;
-        return Token(OP_RBRACKET, lexeme);
+        return Token{OP_RBRACKET, lexeme};
     case '*':  //*  *=
         lexeme += consumePeek(c);
         if (c == '=') {
+            lexeme += consumePeek(c);
             lastToken = OP_MULAGN;
-            return Token(OP_MULAGN, lexeme);
+            return Token{OP_MULAGN, lexeme};
         }
         lastToken = OP_MUL;
-        return Token(OP_MUL, lexeme);
+        return Token{OP_MUL, lexeme};
     case '^':  //^  ^=
         lexeme += consumePeek(c);
         if (c == '=') {
+            lexeme += consumePeek(c);
             lastToken = OP_BITXORAGN;
-            return Token(OP_BITXORAGN, lexeme);
+            return Token{OP_BITXORAGN, lexeme};
         }
         lastToken = OP_XOR;
-        return Token(OP_XOR, lexeme);
+        return Token{OP_XOR, lexeme};
     case '>':  //>  >=  >>  >>=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_GE;
-            return Token(OP_GE, lexeme);
+            return Token{OP_GE, lexeme};
         }
         else if (c == '>') {
             lexeme += consumePeek(c);
             if (c == '=') {
+                lexeme += consumePeek(c);
                 lastToken = OP_RSFTAGN;
-                return Token(OP_RSFTAGN, lexeme);
+                return Token{OP_RSFTAGN, lexeme};
             }
             lastToken = OP_RSHIFT;
-            return Token(OP_RSHIFT, lexeme);
+            return Token{OP_RSHIFT, lexeme};
         }
         lastToken = OP_GT;
-        return Token(OP_GT, lexeme);
+        return Token{OP_GT, lexeme};
     case '{':
         lexeme += consumePeek(c);
         lastToken = OP_LBRACE;
-        return Token(OP_LBRACE, lexeme);
+        return Token{OP_LBRACE, lexeme};
     case '}':
         lexeme += consumePeek(c);
         lastToken = OP_RBRACE;
-        return Token(OP_RBRACE, lexeme);
+        return Token{OP_RBRACE, lexeme};
     case '/': {  // /  /= // /*...*/
         char pending = consumePeek(c);
         if (c == '=') {
             lexeme += pending;
             lexeme += consumePeek(c);
             lastToken = OP_DIVAGN;
-            return Token(OP_DIVAGN, lexeme);
+            return Token{OP_DIVAGN, lexeme};
         }
         else if (c == '/') {
             do {
@@ -700,34 +698,34 @@ skip_comment_and_find_next:
         }
         lexeme += pending;
         lastToken = OP_DIV;
-        return Token(OP_DIV, lexeme);
+        return Token{OP_DIV, lexeme};
     }
     case ':':  // :=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_SHORTAGN;
-            return Token(OP_SHORTAGN, lexeme);
+            return Token{OP_SHORTAGN, lexeme};
         }
         lastToken = OP_COLON;
-        return Token(OP_COLON, lexeme);
+        return Token{OP_COLON, lexeme};
     case ',':
         lexeme += consumePeek(c);
         lastToken = OP_COMMA;
-        return Token(OP_COMMA, lexeme);
+        return Token{OP_COMMA, lexeme};
     case ';':
         lexeme += consumePeek(c);
         lastToken = OP_SEMI;
-        return Token(OP_SEMI, lexeme);
+        return Token{OP_SEMI, lexeme};
     case '%':  //%  %=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_MODAGN;
-            return Token(OP_MODAGN, lexeme);
+            return Token{OP_MODAGN, lexeme};
         }
         lastToken = OP_MOD;
-        return Token(OP_MOD, lexeme);
+        return Token{OP_MOD, lexeme};
         // case '.' has already checked
     }
 
