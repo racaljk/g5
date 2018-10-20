@@ -1,6 +1,6 @@
 //===----------------------------------------------------------------------===//
 // Minimalism guided practice of golang compiler and runtime bundled 
-// implementation, I try to do all works within 5 functions. 
+// implementation, I try to do all works within 5 named functions. 
 //
 // Written by racaljk@github<1948638989@qq.com>
 //===----------------------------------------------------------------------===//
@@ -118,12 +118,12 @@ struct AstLabeledStmt _ND {
     AstNode* stmt{};
 };
 struct AstIfStmt _ND {
-    AstNode* before{};
+    AstNode* init{};
     AstExpr* cond{};
     AstNode* ifBlock{}, *elseBlock{};
 };
 struct AstSwitchStmt _ND {
-    AstNode* before{};
+    AstNode* init{};
     AstNode* cond{};
     vector<AstNode*> caseList{};
 };
@@ -157,11 +157,7 @@ struct AstRecvStmt _ND {
     AstNode* recvExpr{};
 };
 struct AstForStmt _ND {
-    union {
-        AstNode* cond;
-        AstNode* forClause;
-        AstNode* rangeClause;
-    }afs{};
+    AstNode* init{}, *cond{}, *post{};
     AstNode* block{};
 };
 struct AstForClause _ND {
@@ -169,12 +165,14 @@ struct AstForClause _ND {
     AstNode* cond{};
     AstNode* postStmt{};
 };
+struct AstSRangeClause _ND {
+    vector<string> lhs;
+    AstExpr* rhs{};
+};
 struct AstRangeClause _ND {
-    union {
-        AstNode* exprList;
-        AstNode* identList;
-    }arc{};
-    AstNode* expr{};
+    AstExprList* lhs;
+    TokenType op;
+    AstExpr* rhs{};
 };
 struct AstExprStmt _ND { AstExpr* expr{}; };
 struct AstSendStmt _ND { AstExpr* receiver{}, *sender{}; };
@@ -1262,6 +1260,12 @@ const AstNode* parse(const string & filename) {
         return nullptr;
     };
     parseSimpleStmt = [&](AstExprList* lhs, Token&t)->AstNode* {
+        if (t.type == KW_range){    //special case for ForStmt
+            auto*stmt = new AstSRangeClause;
+            t = next(f);
+            stmt->rhs = parseExpr(t);
+            return stmt;
+        }
         if (lhs == nullptr) lhs = parseExprList(t);
 
         switch (t.type) {
@@ -1283,28 +1287,52 @@ const AstNode* parse(const string & filename) {
         }
         case OP_SHORTAGN: {
             if (lhs->exprList.size() == 0) throw runtime_error("one expr required");
-            auto*stmt = new AstSAssignStmt;
+
+            vector<string> identList;
             for (auto* e : lhs->exprList) {
                 string identName =
                     dynamic_cast<AstName*>(
                         dynamic_cast<AstPrimaryExpr*>(
                             e->lhs->expr)->expr)->name;
 
-                stmt->lhs.push_back(identName);
+                identList.push_back(identName);
             }
             t = next(f);
-            stmt->rhs = parseExprList(t);
-            return stmt;
+            if (t.type == KW_range) {
+                t = next(f);
+                auto* stmt = new AstSRangeClause;
+                stmt->lhs = move(identList);
+                stmt->rhs = parseExpr(t);
+                return stmt;
+            }
+            else {
+                auto*stmt = new AstSAssignStmt;
+                stmt->lhs = move(identList);
+                stmt->rhs = parseExprList(t);
+                return stmt;
+            }
         }
         case OP_ADDAGN:case OP_SUBAGN:case OP_BITORAGN:case OP_BITXORAGN:case OP_MULAGN:case OP_DIVAGN:
         case OP_MODAGN:case OP_LSFTAGN:case OP_RSFTAGN:case OP_BITANDAGN:case OP_ANDXORAGN:case OP_AGN: {
             if (lhs->exprList.size() == 0) throw runtime_error("one expr required");
-            auto* stmt = new AstAssignStmt;
-            stmt->lhs = lhs;
-            stmt->op = t.type;
+            auto op = t.type;
             t = next(f);
-            stmt->rhs = parseExprList(t);
-            return stmt;
+            if (t.type == KW_range) {
+                t = next(f);
+                auto* stmt = new AstRangeClause;
+                stmt->lhs = lhs;
+                stmt->op = op;
+                stmt->rhs = parseExpr(t);
+                return stmt;
+            }
+            else {
+                auto* stmt = new AstAssignStmt;
+                stmt->lhs = lhs;
+                stmt->op = op;
+                stmt->rhs = parseExprList(t);
+                return stmt;
+            }
+
         }
         default: {//ExprStmt
             if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
@@ -1334,7 +1362,7 @@ const AstNode* parse(const string & filename) {
         if (t.type == OP_LBRACE) throw runtime_error("if statement requires a condition");
         auto* tmp = parseSimpleStmt(nullptr, t);
         if (t.type == OP_SEMI) {
-            node->before = tmp;
+            node->init = tmp;
             t = next(f);
             node->cond = parseExpr(t);
         }
@@ -1359,7 +1387,7 @@ const AstNode* parse(const string & filename) {
         eat(KW_switch, "expect keyword switch");
         AstSwitchStmt* node = new AstSwitchStmt;
         if (t.type != OP_LBRACE) {
-            node->before = parseSimpleStmt(nullptr, t);
+            node->init = parseSimpleStmt(nullptr, t);
             if (t.type == OP_SEMI) t = next(f); 
             if (t.type != OP_LBRACE) node->cond = parseSimpleStmt(nullptr, t);
         }
@@ -1448,55 +1476,24 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseForStmt = [&](Token&t)->AstNode* {
-        AstForStmt* node{};
-        if (t.type == KW_for) {
-            node = new AstForStmt;
-            t = next(f);
-            if (auto*tmp = parseExpr(t); tmp != nullptr) {
-                node->afs.cond = tmp;
+        eat(KW_for, "expect keyword for");
+        auto* node = new AstForStmt;
+        if (t.type != OP_LBRACE) {
+            auto*tmp = parseSimpleStmt(nullptr, t);
+            switch (t.type) {
+            case OP_LBRACE:node->cond = tmp;
+                break;
+            case OP_SEMI:
+                node->init = tmp;
+                eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
+                node->cond = parseExpr(t);
+                eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
+                node->post = parseSimpleStmt(nullptr, t);
+                break;
+            default:throw runtime_error("expect {/;/range/:=/=");
             }
-            else if (auto*tmp = parseForClause(t); tmp != nullptr) {
-                node->afs.forClause = tmp;
-            }
-            else if (auto*tmp = parseRangeClause(t); tmp != nullptr) {
-                node->afs.rangeClause = tmp;
-            }
-            t = next(f);
-            node->block = parseBlock(t);
         }
-        return node;
-    };
-    parseForClause = [&](Token&t)->AstNode* {
-        AstForClause * node{};
-        if (auto*tmp = parseSimpleStmt(nullptr, t); tmp != nullptr) {
-            node = new AstForClause;
-            node->initStmt = tmp;
-            expect(OP_SEMI, "expect semicolon in for clause");
-            node->cond = parseExpr(t);
-            expect(OP_SEMI, "expect semicolon in for clause");
-            node->postStmt = parseSimpleStmt(nullptr, t);
-        }
-        return node;
-    };
-    parseRangeClause = [&](Token&t)->AstNode* {
-        AstRangeClause*node{};
-        if (auto*tmp = parseExprList(t); tmp != nullptr) {
-            node = new AstRangeClause;
-            node->arc.exprList = tmp;
-            expect(OP_EQ, "expect =");
-            t = next(f);
-        }
-        else if (auto* tmp = parseIdentList(t); tmp != nullptr) {
-            node = new AstRangeClause;
-            node->arc.identList = tmp;
-            expect(OP_SHORTAGN, "expect :=");
-            t = next(f);
-        }
-        if (t.type == KW_range) {
-            if (node == nullptr) node = new AstRangeClause;
-            t = next(f);
-            node->expr = parseExpr(t);
-        }
+        node->block = parseBlock(t);
         return node;
     };
 #pragma endregion
@@ -1570,7 +1567,6 @@ const AstNode* parse(const string & filename) {
                     t = next(f);
                     AstNode* start = nullptr;//Ignore start if next token is :(syntax of operand[:xxx])
                     if (t.type != OP_COLON) {
-                        // operand[6] index syntax
                         start = parseExpr(t);
                         if (t.type == OP_RBRACKET) {
                             auto* e = new AstIndexExpr;

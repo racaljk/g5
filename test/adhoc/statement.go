@@ -7,6 +7,40 @@ import (
 	"strconv"
 	"strings"
 )
+func forstmt(){
+    for{
+        fmt.Println("ffff")
+    }
+
+    for a < b {
+	    a *= 2
+    }
+
+    for i := 0; i < 10; i++ {
+	    f(i)
+    }
+    for key, val = range m {
+	    h(key, val)
+    }
+    // key == last map key encountered in iteration
+    // val == map[key]
+
+    var ch chan Work = producer()
+    for w := range ch {
+	    doWork(w)
+    }
+
+    // empty a channel
+    for range ch {}
+
+    for i, _ := range testdata.a {
+	    // testdata.a is never evaluated; len(testdata.a) is constant
+	    // i ranges from 0 to 6
+	    f(i)
+    }
+}
+
+
 func labeledstmt(){
     Error: log.Panic("error encountered")
     OK:
@@ -160,8 +194,8 @@ func main(){
 
 	slice := make([]int,18,20)
 	//fmt.Println(slice)
-	for i:=0;i<len(slice);i++{
-		fmt.Println(slice[i])
+	for p:=0;p<len(slice);p++{
+		fmt.Println(slice[p])
 	}
 
 	sliceInfo(slice)
@@ -250,7 +284,7 @@ func (obj *Dormitory) print(){...}		//bad, type of Dormitory actually do not imp
  */
 
 func task(startID int){
-	for i:=0;i<5;i++{
+	for xs:=0;i<5;i++{
 		fmt.Println("goroutine:",startID,"- number:",i)
 	}
 }
