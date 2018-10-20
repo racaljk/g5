@@ -1,7 +1,7 @@
 # g5 : golang compiler and runtime in 5 named functions
-| MSVC2017 | g++7.3.0 | Code quality |
-| :--------: | :--------: |  :--------: | 
-| [![Build status](https://ci.appveyor.com/api/projects/status/61b9imkcd1ibi3gt?svg=true)](https://ci.appveyor.com/project/racaljk/g5) | [ ![Build Status](https://travis-ci.org/racaljk/g5.svg?branch=master)](https://travis-ci.org/racaljk/g5) | [![Total alerts](https://img.shields.io/lgtm/alerts/g/racaljk/g5.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/racaljk/g5/alerts/) |
+| MSVC2017 | g++7.3.0 | Code alert | Code quality |
+| :--------: | :--------: |  :--------: | :--------: |
+| [![Build status](https://ci.appveyor.com/api/projects/status/61b9imkcd1ibi3gt?svg=true)](https://ci.appveyor.com/project/racaljk/g5) | [ ![Build Status](https://travis-ci.org/racaljk/g5.svg?branch=master)](https://travis-ci.org/racaljk/g5) | [![Total alerts](https://img.shields.io/lgtm/alerts/g/racaljk/g5.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/racaljk/g5/alerts/) | [![Codacy Badge](https://api.codacy.com/project/badge/Grade/7a2ba9735d27408f8ca617cb0a0b9a05)](https://www.codacy.com/app/racaljk/g5?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=racaljk/g5&amp;utm_campaign=Badge_Grade) |
 
  it works in progress, stay tuned~
 

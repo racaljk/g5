@@ -210,7 +210,7 @@ struct AstKeyedElement _ND {
     AstNode*key{};
     AstNode*element{};
 };
-struct AstBasicLit _ND { TokenType type{}; string value; };
+struct AstBasicLit _ND { TokenType type{}; string value; AstBasicLit(TokenType t, const string&s) :type(t), value(s) {} };
 struct AstCompositeLit _ND { AstNode* litName{}; AstLitValue* litValue{}; };
 //===----------------------------------------------------------------------===//
 // global data
@@ -734,7 +734,6 @@ const AstNode* parse(const string & filename) {
         parseParam, parseParamDecl, parseResult, parseInterfaceType,
         parseMapType, parseChanType,
         parseVarSpec, parseStmt,
-        parseBasicLit,
         parseIfStmt, 
         parseSelectStmt, parseForStmt,
         parseOperand, 
@@ -1588,7 +1587,6 @@ const AstNode* parse(const string & filename) {
                     tmp = e;
                 }
                 else if (t.type == OP_LBRACE) {
-          
                     // only operand has literal value, otherwise, treats it as a block
                     if (typeid(*tmp) == typeid(AstArrayType) ||typeid(*tmp) == typeid(AstSliceType) ||
                         typeid(*tmp) == typeid(AstStructType) ||typeid(*tmp) == typeid(AstMapType) ||
@@ -1600,13 +1598,9 @@ const AstNode* parse(const string & filename) {
                         e->litValue = parseLitValue(t);
                         tmp = e;
                     }
-                    else {
-                        break;
-                    }
+                    else break; 
                 }
-                else {
-                    break;
-                }
+                else break;
             }
             node->expr = tmp;
         }
@@ -1617,9 +1611,8 @@ const AstNode* parse(const string & filename) {
         case TK_ID:
             return parseName(false, t);
         case LIT_INT:case LIT_FLOAT:case LIT_IMG:case LIT_RUNE:case LIT_STR:
-            return parseBasicLit(t);
-        case KW_struct:case KW_map:case OP_LBRACKET:case KW_chan:
-        case KW_interface:
+        {auto*tmp = new AstBasicLit(t.type, t.lexeme); t = next(f); return tmp; }
+        case KW_struct:case KW_map:case OP_LBRACKET:case KW_chan:case KW_interface:
             return parseType(t);
         case KW_func:
             return parseFuncDecl(true, t);
@@ -1628,14 +1621,6 @@ const AstNode* parse(const string & filename) {
         }
         default:return nullptr;
         }
-    };
-
-    parseBasicLit = [&](Token&t)->AstNode* {
-        auto * node = new AstBasicLit;
-        node->type = t.type;
-        node->value = t.lexeme;
-        t = next(f);
-        return node;
     };
     parseLitValue = [&](Token&t)->AstLitValue* {
         AstLitValue*node{};
