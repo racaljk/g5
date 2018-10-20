@@ -5,7 +5,6 @@
 //
 // Written by racaljk@github<1948638989@qq.com>
 //===----------------------------------------------------------------------===//
-#include <cctype>
 #include <cstdio>
 #include <exception>
 #include <fstream>
@@ -230,7 +229,6 @@ auto anyone = [](int k, auto... args) ->bool { return ((args == k) || ...); };
 //===----------------------------------------------------------------------===//
 // Implementation of golang compiler and runtime within 5 functions
 //===----------------------------------------------------------------------===//
-
 Token next(fstream& f) {
     auto consumePeek = [&](char& c) {
         f.get();
@@ -267,8 +265,8 @@ skip_comment_and_find_next:
 
     string lexeme;
     // identifier = letter { letter | unicode_digit } .
-    if (isalpha(c) || c == '_') {
-        while (isalnum(c) || c == '_') {
+    if (c >= 'a'&&c <= 'z' || c >= 'A'&&c <= 'Z' || c == '_') {
+        while (c >= 'a'&&c <= 'z' || c >= 'A'&&c <= 'Z' || c >= '0'&&c <= '9' || c == '_') {
             lexeme += consumePeek(c);
         }
 
@@ -293,22 +291,20 @@ skip_comment_and_find_next:
     // exponent  = ( "e" | "E" ) [ "+" | "-" ] decimals .
 
     // imaginary_lit = (decimals | float_lit) "i" .
-    if (isdigit(c) || c == '.') {
+    if (c >= '0'&&c <= '9' || c == '.') {
         if (c == '0') {
             lexeme += consumePeek(c);
             if (c == 'x' || c == 'X') {
                 do {
                     lexeme += consumePeek(c);
-                } while (isdigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F');
+                } while (c >= '0'&&c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F');
                 lastToken = LIT_INT;
                 return Token{ LIT_INT, lexeme };
-            }
-            else if ((c >= '0' && c <= '9') || anyone(c, '.', 'e', 'E', 'i')) {
+            } else if ((c >= '0' && c <= '9') || anyone(c, '.', 'e', 'E', 'i')) {
                 while ((c >= '0' && c <= '9') || anyone(c, '.', 'e', 'E', 'i')) {
                     if (c >= '0' && c <= '7') {
                         lexeme += consumePeek(c);
-                    }
-                    else {
+                    } else {
                         goto shall_float;
                     }
                 }
@@ -316,8 +312,7 @@ skip_comment_and_find_next:
                 return Token{ LIT_INT, lexeme };
             }
             goto may_float;
-        }
-        else {  // 1-9 or . or just a single 0
+        } else {  // 1-9 or . or just a single 0
         may_float:
             TokenType type = LIT_INT;
             if (c == '.') {
@@ -328,34 +323,27 @@ skip_comment_and_find_next:
                         lexeme += consumePeek(c);
                         lastToken = OP_VARIADIC;
                         return Token{ OP_VARIADIC, lexeme };
+                    } else {
+                        fprintf(stderr,"expect variadic notation(...)");
                     }
-                    else {
-                        throw runtime_error(
-                            "expect variadic notation(...) but got .." + c);
-                    }
-                }
-                else if (c >= '0'&&c <= '9') {
+                } else if (c >= '0'&&c <= '9') {
                     type = LIT_FLOAT;
-                }
-                else {
+                } else {
                     lastToken = OP_DOT;
                     return Token{ OP_DOT, "." };
                 }
                 goto shall_float;
-            }
-            else if (c >= '1'&&c <= '9') {
+            } else if (c >= '1'&&c <= '9') {
                 lexeme += consumePeek(c);
             shall_float:  // skip char consuming and appending since we did that before jumping here;
                 bool hasDot = false, hasExponent = false;
                 while ((c >= '0' && c <= '9') || anyone(c, '.', 'e', 'E', 'i')) {
                     if (c >= '0' && c <= '9') {
                         lexeme += consumePeek(c);
-                    }
-                    else if (c == '.' && !hasDot) {
+                    } else if (c == '.' && !hasDot) {
                         lexeme += consumePeek(c);
                         type = LIT_FLOAT;
-                    }
-                    else if ((c == 'e' && !hasExponent) ||
+                    } else if ((c == 'e' && !hasExponent) ||
                         (c == 'E' && !hasExponent)) {
                         hasExponent = true;
                         type = LIT_FLOAT;
@@ -363,8 +351,7 @@ skip_comment_and_find_next:
                         if (c == '+' || c == '-') {
                             lexeme += consumePeek(c);
                         }
-                    }
-                    else {
+                    } else {
                         f.get();
                         column++;
                         lexeme += c;
@@ -374,8 +361,7 @@ skip_comment_and_find_next:
                 }
                 lastToken = type;
                 return Token{ type, lexeme };
-            }
-            else {
+            } else {
                 lastToken = type;
                 return Token{ type, lexeme };
             }
@@ -399,32 +385,27 @@ skip_comment_and_find_next:
         if (c == '\\') {
             lexeme += consumePeek(c);
 
-            if (anyone(c,'U','u','X','x')) {
+            if (anyone(c, 'U', 'u', 'X', 'x')) {
                 do {
                     lexeme += consumePeek(c);
-                } while (isdigit(c) || (c >= 'a' && c <= 'f') ||
+                } while (c >= '0'&&c <= '9' || (c >= 'a' && c <= 'f') ||
                     (c >= 'A' && c <= 'F'));
-            }
-            else if (c >= '0' && c <= '7') {
+            } else if (c >= '0' && c <= '7') {
                 do {
                     lexeme += consumePeek(c);
                 } while (c >= '0' && c <= '7');
-            }
-            else if (anyone(c, 'a', 'b', 'f', 'n', 'r', 't', 'v', '\\', '\'', '"')) {
+            } else if (anyone(c, 'a', 'b', 'f', 'n', 'r', 't', 'v', '\\', '\'', '"')) {
                 lexeme += consumePeek(c);
-            }
-            else {
-                throw runtime_error("illegal rune");
+            } else {
+                fprintf(stderr, "illegal rune");
             }
 
-        }
-        else {
+        } else {
             lexeme += consumePeek(c);
         }
 
         if (c != '\'') {
-            throw runtime_error(
-                "illegal rune at least in current implementation of g8");
+            fprintf(stderr,"illegal rune at least in current implementation of g8");
         }
         lexeme += consumePeek(c);
         lastToken = LIT_RUNE;
@@ -440,14 +421,12 @@ skip_comment_and_find_next:
             if (c == '\n') line++;
         } while (f.good() && c != '`');
         if (c != '`') {
-            throw runtime_error(
-                "raw string literal does not have a closed symbol \"`\"");
+            fprintf(stderr,"raw string literal does not have a closed symbol \"`\"");
         }
         lexeme += consumePeek(c);
         lastToken = LIT_STR;
         return Token{ LIT_STR, lexeme };
-    }
-    else if (c == '"') {
+    } else if (c == '"') {
         do {
             lexeme += consumePeek(c);
             if (c == '\\') {
@@ -456,8 +435,7 @@ skip_comment_and_find_next:
             }
         } while (f.good() && (c != '\n' && c != '\r' && c != '"'));
         if (c != '"') {
-            throw runtime_error(
-                R"(string literal does not have a closed symbol """)");
+            fprintf(stderr,R"(string literal does not have a closed symbol """)");
         }
         lexeme += consumePeek(c);
         lastToken = LIT_STR;
@@ -472,8 +450,7 @@ skip_comment_and_find_next:
             lexeme += consumePeek(c);
             lastToken = OP_ADDAGN;
             return Token{ OP_ADDAGN, lexeme };
-        }
-        else if (c == '+') {
+        } else if (c == '+') {
             lexeme += consumePeek(c);
             lastToken = OP_INC;
             return Token{ OP_INC, lexeme };
@@ -485,13 +462,11 @@ skip_comment_and_find_next:
             lexeme += consumePeek(c);
             lastToken = OP_BITANDAGN;
             return Token{ OP_BITANDAGN, lexeme };
-        }
-        else if (c == '&') {
+        } else if (c == '&') {
             lexeme += consumePeek(c);
             lastToken = OP_AND;
             return Token{ OP_AND, lexeme };
-        }
-        else if (c == '^') {
+        } else if (c == '^') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
@@ -535,8 +510,7 @@ skip_comment_and_find_next:
             lexeme += consumePeek(c);
             lastToken = OP_SUBAGN;
             return Token{ OP_SUBAGN, lexeme };
-        }
-        else if (c == '-') {
+        } else if (c == '-') {
             lexeme += consumePeek(c);
             lastToken = OP_DEC;
             return Token{ OP_DEC, lexeme };
@@ -549,8 +523,7 @@ skip_comment_and_find_next:
             lexeme += consumePeek(c);
             lastToken = OP_BITORAGN;
             return Token{ OP_BITORAGN, lexeme };
-        }
-        else if (c == '|') {
+        } else if (c == '|') {
             lexeme += consumePeek(c);
             lastToken = OP_OR;
             return Token{ OP_OR, lexeme };
@@ -563,13 +536,11 @@ skip_comment_and_find_next:
             lexeme += consumePeek(c);
             lastToken = OP_LE;
             return Token{ OP_LE, lexeme };
-        }
-        else if (c == '-') {
+        } else if (c == '-') {
             lexeme += consumePeek(c);
             lastToken = OP_CHAN;
             return Token{ OP_CHAN, lexeme };
-        }
-        else if (c == '<') {
+        } else if (c == '<') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
@@ -613,8 +584,7 @@ skip_comment_and_find_next:
             lexeme += consumePeek(c);
             lastToken = OP_GE;
             return Token{ OP_GE, lexeme };
-        }
-        else if (c == '>') {
+        } else if (c == '>') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
@@ -641,14 +611,12 @@ skip_comment_and_find_next:
             lexeme += consumePeek(c);
             lastToken = OP_DIVAGN;
             return Token{ OP_DIVAGN, lexeme };
-        }
-        else if (c == '/') {
+        } else if (c == '/') {
             do {
                 consumePeek(c);
             } while (f.good() && (c != '\n' && c != '\r'));
             goto skip_comment_and_find_next;
-        }
-        else if (c == '*') {
+        } else if (c == '*') {
             do {
                 consumePeek(c);
                 if (c == '\n') line++;
@@ -693,8 +661,7 @@ skip_comment_and_find_next:
         return Token{ OP_MOD, lexeme };
         // case '.' has already checked
     }
-
-    throw runtime_error("illegal token in source file");
+    fprintf(stderr, "illegal token in source file");
 }
 
 const AstNode* parse(const string & filename) {
