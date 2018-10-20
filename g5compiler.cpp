@@ -1,6 +1,7 @@
 //===----------------------------------------------------------------------===//
 // Minimalism guided practice of golang compiler and runtime bundled 
-// implementation, I try to do all works within 5 named functions. 
+// implementation, I try to do all works within 5 explicit functions ( lambda is
+// not regarded as the *explicit function*.
 //
 // Written by racaljk@github<1948638989@qq.com>
 //===----------------------------------------------------------------------===//
@@ -97,13 +98,9 @@ struct AstResult _ND {
     AstNode* param;
     AstNode* type;
 };
-struct AstMethodSpec _ND {
-    AstName* name;
-    AstSignature* signature;
-};
-struct AstInterfaceType _ND { vector<AstMethodSpec*> methodSpec; };
+struct AstInterfaceType _ND { vector<tuple<AstName*,AstSignature*>> method; };
 struct AstSliceType _ND { AstNode* elemType{}; };
-struct AstMapType _ND {AstNode* keyType{};AstNode* elemType{};};
+struct AstMapType _ND { AstNode* keyType{}; AstNode* elemType{}; };
 struct AstChanType _ND { AstNode* elemType{}; };
 // Statement
 struct AstGoStmt _ND { AstExpr* expr{}; AstGoStmt(AstExpr* expr) :expr(expr) {} };
@@ -205,12 +202,15 @@ struct AstCallExpr _ND {
     AstNode* type{};
     bool isVariadic{};
 };
-struct AstLitValue _ND { vector< AstNode*> keyedElement; };
 struct AstKeyedElement _ND {
     AstNode*key{};
     AstNode*element{};
 };
-struct AstBasicLit _ND { TokenType type{}; string value; AstBasicLit(TokenType t, const string&s) :type(t), value(s) {} };
+struct AstLitValue _ND { vector<AstKeyedElement*> keyedElement; };
+struct AstBasicLit _ND { 
+    TokenType type{}; string value; 
+    AstBasicLit(TokenType t, const string&s) :type(t), value(s) {} 
+};
 struct AstCompositeLit _ND { AstNode* litName{}; AstLitValue* litValue{}; };
 //===----------------------------------------------------------------------===//
 // global data
@@ -225,12 +225,15 @@ struct Token { TokenType type{}; string lexeme; };
 static struct goruntime {
     string package;
 } grt;
+auto anyone = [](int k, auto... args) ->bool { return ((args == k) || ...); };
 
 //===----------------------------------------------------------------------===//
 // Implementation of golang compiler and runtime within 5 functions
 //===----------------------------------------------------------------------===//
 
 Token next(fstream& f) {
+    
+
     auto consumePeek = [&](char& c) {
         f.get();
         column++;
@@ -242,16 +245,12 @@ Token next(fstream& f) {
 
 skip_comment_and_find_next:
 
-    for (; c == ' ' || c == '\r' || c == '\t' || c == '\n'; column++) {
+    for (; anyone(c, ' ', '\r', '\t', '\n'); column++) {
         if (c == '\n') {
             line++;
             column = 1;
-            if ((lastToken >= TK_ID && lastToken <= LIT_STR)
-                || lastToken == KW_fallthrough || lastToken == KW_continue
-                || lastToken == KW_return || lastToken == KW_break
-                || lastToken == OP_INC || lastToken == OP_DEC
-                || lastToken == OP_RPAREN
-                || lastToken == OP_RBRACKET || lastToken == OP_RBRACE) {
+            if (anyone(lastToken, TK_ID, LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR, KW_fallthrough,
+                KW_continue, KW_return, KW_break, OP_INC, OP_DEC, OP_RPAREN, OP_RBRACKET, OP_RBRACE)) {
                 consumePeek(c);
                 lastToken = OP_SEMI;
                 return Token{ OP_SEMI, ";" };
@@ -262,16 +261,14 @@ skip_comment_and_find_next:
     if (f.eof()) {
         if (shouldEof) {
             lastToken = TK_EOF;
-            return Token{TK_EOF, ""};
+            return Token{ TK_EOF, "" };
         }
         shouldEof = 1;
         lastToken = OP_SEMI;
-        return Token{OP_SEMI, ";"};
+        return Token{ OP_SEMI, ";" };
     }
 
     string lexeme;
-
-
     // identifier = letter { letter | unicode_digit } .
     if (isalpha(c) || c == '_') {
         while (isalnum(c) || c == '_') {
@@ -284,7 +281,7 @@ skip_comment_and_find_next:
                 return Token{ static_cast<TokenType>(i + 1), lexeme };
             }
         lastToken = TK_ID;
-        return Token{TK_ID, lexeme};
+        return Token{ TK_ID, lexeme };
     }
 
     // int_lit     = decimal_lit | octal_lit | hex_lit .
@@ -307,12 +304,10 @@ skip_comment_and_find_next:
                     lexeme += consumePeek(c);
                 } while (isdigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F');
                 lastToken = LIT_INT;
-                return Token{LIT_INT, lexeme};
+                return Token{ LIT_INT, lexeme };
             }
-            else if ((c >= '0' && c <= '9') ||
-                (c == '.' || c == 'e' || c == 'E' || c == 'i')) {
-                while ((c >= '0' && c <= '9') ||
-                    (c == '.' || c == 'e' || c == 'E' || c == 'i')) {
+            else if ((c >= '0' && c <= '9') || anyone(c, '.', 'e', 'E', 'i')) {
+                while ((c >= '0' && c <= '9') || anyone(c, '.', 'e', 'E', 'i')) {
                     if (c >= '0' && c <= '7') {
                         lexeme += consumePeek(c);
                     }
@@ -321,7 +316,7 @@ skip_comment_and_find_next:
                     }
                 }
                 lastToken = LIT_INT;
-                return Token{LIT_INT, lexeme};
+                return Token{ LIT_INT, lexeme };
             }
             goto may_float;
         }
@@ -335,7 +330,7 @@ skip_comment_and_find_next:
                     if (c == '.') {
                         lexeme += consumePeek(c);
                         lastToken = OP_VARIADIC;
-                        return Token{OP_VARIADIC, lexeme};
+                        return Token{ OP_VARIADIC, lexeme };
                     }
                     else {
                         throw runtime_error(
@@ -347,7 +342,7 @@ skip_comment_and_find_next:
                 }
                 else {
                     lastToken = OP_DOT;
-                    return Token{OP_DOT, "."};
+                    return Token{ OP_DOT, "." };
                 }
                 goto shall_float;
             }
@@ -355,8 +350,7 @@ skip_comment_and_find_next:
                 lexeme += consumePeek(c);
             shall_float:  // skip char consuming and appending since we did that before jumping here;
                 bool hasDot = false, hasExponent = false;
-                while ((c >= '0' && c <= '9') || c == '.' || c == 'e' || c == 'E' ||
-                    c == 'i') {
+                while ((c >= '0' && c <= '9') || anyone(c, '.', 'e', 'E', 'i')) {
                     if (c >= '0' && c <= '9') {
                         lexeme += consumePeek(c);
                     }
@@ -378,15 +372,15 @@ skip_comment_and_find_next:
                         column++;
                         lexeme += c;
                         lastToken = LIT_IMG;
-                        return Token{LIT_IMG, lexeme};
+                        return Token{ LIT_IMG, lexeme };
                     }
                 }
                 lastToken = type;
-                return Token{type, lexeme};
+                return Token{ type, lexeme };
             }
             else {
                 lastToken = type;
-                return Token{type, lexeme};
+                return Token{ type, lexeme };
             }
         }
     }
@@ -408,7 +402,7 @@ skip_comment_and_find_next:
         if (c == '\\') {
             lexeme += consumePeek(c);
 
-            if (c == 'U' || c == 'u' || c == 'x' || c == 'X') {
+            if (anyone(c,'U','u','X','x')) {
                 do {
                     lexeme += consumePeek(c);
                 } while (isdigit(c) || (c >= 'a' && c <= 'f') ||
@@ -419,8 +413,7 @@ skip_comment_and_find_next:
                     lexeme += consumePeek(c);
                 } while (c >= '0' && c <= '7');
             }
-            else if (c == 'a' || c == 'b' || c == 'f' || c == 'n' || c == 'r' || c == 't' ||
-                c == 'v' || c == '\\' || c == '\'' || c == '"') {
+            else if (anyone(c, 'a', 'b', 'f', 'n', 'r', 't', 'v', '\\', '\'', '"')) {
                 lexeme += consumePeek(c);
             }
             else {
@@ -438,7 +431,7 @@ skip_comment_and_find_next:
         }
         lexeme += consumePeek(c);
         lastToken = LIT_RUNE;
-        return Token{LIT_RUNE, lexeme};
+        return Token{ LIT_RUNE, lexeme };
     }
 
     // string_lit             = raw_string_lit | interpreted_string_lit .
@@ -455,7 +448,7 @@ skip_comment_and_find_next:
         }
         lexeme += consumePeek(c);
         lastToken = LIT_STR;
-        return Token{LIT_STR, lexeme};
+        return Token{ LIT_STR, lexeme };
     }
     else if (c == '"') {
         do {
@@ -471,7 +464,7 @@ skip_comment_and_find_next:
         }
         lexeme += consumePeek(c);
         lastToken = LIT_STR;
-        return Token{LIT_STR, lexeme};
+        return Token{ LIT_STR, lexeme };
     }
 
     // operators
@@ -481,176 +474,176 @@ skip_comment_and_find_next:
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_ADDAGN;
-            return Token{OP_ADDAGN, lexeme};
+            return Token{ OP_ADDAGN, lexeme };
         }
         else if (c == '+') {
             lexeme += consumePeek(c);
             lastToken = OP_INC;
-            return Token{OP_INC, lexeme};
+            return Token{ OP_INC, lexeme };
         }
-        return Token{OP_ADD, lexeme};
+        return Token{ OP_ADD, lexeme };
     case '&':  //&  &=  &&  &^  &^=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_BITANDAGN;
-            return Token{OP_BITANDAGN, lexeme};
+            return Token{ OP_BITANDAGN, lexeme };
         }
         else if (c == '&') {
             lexeme += consumePeek(c);
             lastToken = OP_AND;
-            return Token{OP_AND, lexeme};
+            return Token{ OP_AND, lexeme };
         }
         else if (c == '^') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
                 lastToken = OP_ANDXORAGN;
-                return Token{OP_ANDXORAGN, lexeme};
+                return Token{ OP_ANDXORAGN, lexeme };
             }
             lastToken = OP_ANDXOR;
-            return Token{OP_ANDXOR, lexeme};
+            return Token{ OP_ANDXOR, lexeme };
         }
         lastToken = OP_BITAND;
-        return Token{OP_BITAND, lexeme};
+        return Token{ OP_BITAND, lexeme };
     case '=':  //=  ==
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_EQ;
-            return Token{OP_EQ, lexeme};
+            return Token{ OP_EQ, lexeme };
         }
         lastToken = OP_AGN;
-        return Token{OP_AGN, lexeme};
+        return Token{ OP_AGN, lexeme };
     case '!':  //!  !=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_NE;
-            return Token{OP_NE, lexeme};
+            return Token{ OP_NE, lexeme };
         }
         lastToken = OP_NOT;
-        return Token{OP_NOT, lexeme};
+        return Token{ OP_NOT, lexeme };
     case '(':
         lexeme += consumePeek(c);
         lastToken = OP_LPAREN;
-        return Token{OP_LPAREN, lexeme};
+        return Token{ OP_LPAREN, lexeme };
     case ')':
         lexeme += consumePeek(c);
         lastToken = OP_RPAREN;
-        return Token{OP_RPAREN, lexeme};
+        return Token{ OP_RPAREN, lexeme };
     case '-':  //-  -= --
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_SUBAGN;
-            return Token{OP_SUBAGN, lexeme};
+            return Token{ OP_SUBAGN, lexeme };
         }
         else if (c == '-') {
             lexeme += consumePeek(c);
             lastToken = OP_DEC;
-            return Token{OP_DEC, lexeme};
+            return Token{ OP_DEC, lexeme };
         }
         lastToken = OP_SUB;
-        return Token{OP_SUB, lexeme};
+        return Token{ OP_SUB, lexeme };
     case '|':  //|  |=  ||
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_BITORAGN;
-            return Token{OP_BITORAGN, lexeme};
+            return Token{ OP_BITORAGN, lexeme };
         }
         else if (c == '|') {
             lexeme += consumePeek(c);
             lastToken = OP_OR;
-            return Token{OP_OR, lexeme};
+            return Token{ OP_OR, lexeme };
         }
         lastToken = OP_BITOR;
-        return Token{OP_BITOR, lexeme};
+        return Token{ OP_BITOR, lexeme };
     case '<':  //<  <=  <- <<  <<=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_LE;
-            return Token{OP_LE, lexeme};
+            return Token{ OP_LE, lexeme };
         }
         else if (c == '-') {
             lexeme += consumePeek(c);
             lastToken = OP_CHAN;
-            return Token{OP_CHAN, lexeme};
+            return Token{ OP_CHAN, lexeme };
         }
         else if (c == '<') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
                 lastToken = OP_LSFTAGN;
-                return Token{OP_LSFTAGN, lexeme};
+                return Token{ OP_LSFTAGN, lexeme };
             }
             lastToken = OP_LSHIFT;
-            return Token{OP_LSHIFT, lexeme};
+            return Token{ OP_LSHIFT, lexeme };
         }
         lastToken = OP_LT;
-        return Token{OP_LT, lexeme};
+        return Token{ OP_LT, lexeme };
     case '[':
         lexeme += consumePeek(c);
         lastToken = OP_LBRACKET;
-        return Token{OP_LBRACKET, lexeme};
+        return Token{ OP_LBRACKET, lexeme };
     case ']':
         lexeme += consumePeek(c);
         lastToken = OP_RBRACKET;
-        return Token{OP_RBRACKET, lexeme};
+        return Token{ OP_RBRACKET, lexeme };
     case '*':  //*  *=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_MULAGN;
-            return Token{OP_MULAGN, lexeme};
+            return Token{ OP_MULAGN, lexeme };
         }
         lastToken = OP_MUL;
-        return Token{OP_MUL, lexeme};
+        return Token{ OP_MUL, lexeme };
     case '^':  //^  ^=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_BITXORAGN;
-            return Token{OP_BITXORAGN, lexeme};
+            return Token{ OP_BITXORAGN, lexeme };
         }
         lastToken = OP_XOR;
-        return Token{OP_XOR, lexeme};
+        return Token{ OP_XOR, lexeme };
     case '>':  //>  >=  >>  >>=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_GE;
-            return Token{OP_GE, lexeme};
+            return Token{ OP_GE, lexeme };
         }
         else if (c == '>') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
                 lastToken = OP_RSFTAGN;
-                return Token{OP_RSFTAGN, lexeme};
+                return Token{ OP_RSFTAGN, lexeme };
             }
             lastToken = OP_RSHIFT;
-            return Token{OP_RSHIFT, lexeme};
+            return Token{ OP_RSHIFT, lexeme };
         }
         lastToken = OP_GT;
-        return Token{OP_GT, lexeme};
+        return Token{ OP_GT, lexeme };
     case '{':
         lexeme += consumePeek(c);
         lastToken = OP_LBRACE;
-        return Token{OP_LBRACE, lexeme};
+        return Token{ OP_LBRACE, lexeme };
     case '}':
         lexeme += consumePeek(c);
         lastToken = OP_RBRACE;
-        return Token{OP_RBRACE, lexeme};
+        return Token{ OP_RBRACE, lexeme };
     case '/': {  // /  /= // /*...*/
         char pending = consumePeek(c);
         if (c == '=') {
             lexeme += pending;
             lexeme += consumePeek(c);
             lastToken = OP_DIVAGN;
-            return Token{OP_DIVAGN, lexeme};
+            return Token{ OP_DIVAGN, lexeme };
         }
         else if (c == '/') {
             do {
@@ -673,34 +666,34 @@ skip_comment_and_find_next:
         }
         lexeme += pending;
         lastToken = OP_DIV;
-        return Token{OP_DIV, lexeme};
+        return Token{ OP_DIV, lexeme };
     }
     case ':':  // :=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_SHORTAGN;
-            return Token{OP_SHORTAGN, lexeme};
+            return Token{ OP_SHORTAGN, lexeme };
         }
         lastToken = OP_COLON;
-        return Token{OP_COLON, lexeme};
+        return Token{ OP_COLON, lexeme };
     case ',':
         lexeme += consumePeek(c);
         lastToken = OP_COMMA;
-        return Token{OP_COMMA, lexeme};
+        return Token{ OP_COMMA, lexeme };
     case ';':
         lexeme += consumePeek(c);
         lastToken = OP_SEMI;
-        return Token{OP_SEMI, lexeme};
+        return Token{ OP_SEMI, lexeme };
     case '%':  //%  %=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
             lastToken = OP_MODAGN;
-            return Token{OP_MODAGN, lexeme};
+            return Token{ OP_MODAGN, lexeme };
         }
         lastToken = OP_MOD;
-        return Token{OP_MOD, lexeme};
+        return Token{ OP_MOD, lexeme };
         // case '.' has already checked
     }
 
@@ -717,27 +710,21 @@ const AstNode* parse(const string & filename) {
     };
     auto eatOptionalSemi = [&]() { if (t.type == OP_SEMI) t = next(f); };
 
-    auto expect = [&f, &t](TokenType tk, const string& msg) {
-        t = next(f);
-        if (t.type != tk) throw runtime_error(msg);
-        return t;
-    };
     LAMBDA_FUN(TypeDecl); LAMBDA_FUN(VarDecl); LAMBDA_FUN(ConstDecl); LAMBDA_FUN(LitValue);
     LAMBDA_FUN(ImportDecl); LAMBDA_FUN(Expr); LAMBDA_FUN(Signature); LAMBDA_FUN(UnaryExpr);
-    LAMBDA_FUN(PrimaryExpr); LAMBDA_FUN(MethodSpec); LAMBDA_FUN(TypeSpec); LAMBDA_FUN(SwitchStmt);
+    LAMBDA_FUN(PrimaryExpr); LAMBDA_FUN(KeyedElement); LAMBDA_FUN(TypeSpec); LAMBDA_FUN(SwitchStmt);
     LAMBDA_FUN(SelectCase); LAMBDA_FUN(SwitchCase);
     function<AstFuncDecl*(bool, Token&)> parseFuncDecl;
     function<AstNode*(AstExprList *, Token&)> parseSimpleStmt;
     function<AstStmtList*(Token&)> parseBlock;
-    function<AstNode*(Token&)> parseTypeAssertion,parseType,
+    function<AstNode*(Token&)> parseTypeAssertion, parseType,
         parseArrayOrSliceType, parseStructType, parsePtrType, parseFuncType,
         parseParam, parseParamDecl, parseResult, parseInterfaceType,
         parseMapType, parseChanType,
         parseVarSpec, parseStmt,
-        parseIfStmt, 
+        parseIfStmt,
         parseSelectStmt, parseForStmt,
-        parseOperand, 
-        parseKeyedElement, parseKey;
+        parseOperand,parseKey;
 
 #pragma region Common
     auto parseName = [&](bool couldFullName, Token&t)->AstName* {
@@ -948,7 +935,7 @@ const AstNode* parse(const string & filename) {
         if (auto*tmp = parseIdentList(t); tmp != nullptr) {
             node = new AstVarSpec;
             node->identList = tmp;
-            if(t.type == OP_AGN) {
+            if (t.type == OP_AGN) {
                 t = next(f);
                 node->exprList = parseExprList(t);
             }
@@ -1074,7 +1061,7 @@ const AstNode* parse(const string & filename) {
         case KW_interface:return parseInterfaceType(t);
         case KW_map:      return parseMapType(t);
         case KW_chan:     return parseChanType(t);
-        case OP_LPAREN:   {t = next(f); auto*tmp = parseType(t); t = next(f); return tmp; }
+        case OP_LPAREN: {t = next(f); auto*tmp = parseType(t); t = next(f); return tmp; }
         default:return nullptr;
         }
     };
@@ -1090,7 +1077,7 @@ const AstNode* parse(const string & filename) {
             }
             else {
                 dynamic_cast<AstArrayType*>(node)->length = parseExpr(t);
-            } 
+            }
             nestLev--;
             t = next(f);
             dynamic_cast<AstArrayType*>(node)->elemType = parseType(t);
@@ -1142,23 +1129,15 @@ const AstNode* parse(const string & filename) {
         eat(KW_interface, "interface type requires keyword interface");
         eat(OP_LBRACE, "{ is required after interface");
         while (t.type != OP_RBRACE) {
-            if (auto*tmp = parseMethodSpec(t); tmp != nullptr) {
-                node->methodSpec.push_back(tmp);
-                eatOptionalSemi();
+            if (auto* tmp = parseName(true, t); tmp != nullptr && tmp->name.find('.') == string::npos) {
+                node->method.emplace_back(tmp, parseSignature(t));
             }
+            else {
+                node->method.emplace_back(tmp, nullptr);
+            }
+            eatOptionalSemi();
         }
         t = next(f);
-        return node;
-    };
-    parseMethodSpec = [&](Token&t)->AstMethodSpec* {
-        auto * node = new AstMethodSpec;
-        if (auto* tmp = parseName(true, t); tmp != nullptr && tmp->name.find('.') == string::npos) {
-            node->name = tmp;
-            node->signature = parseSignature(t);
-        }
-        else {
-            node->name = tmp;
-        }
         return node;
     };
     parseMapType = [&](Token&t)->AstNode* {
@@ -1196,16 +1175,16 @@ const AstNode* parse(const string & filename) {
 #pragma region Statement
     parseStmt = [&](Token&t)->AstNode* {
         switch (t.type) {
-        case KW_type:       { return parseTypeDecl(t);  }
-        case KW_const:      { return parseConstDecl(t);  }
-        case KW_var:        { return parseVarDecl(t);  }
-        case KW_fallthrough:{t = next(f);  return new AstFallthroughStmt();  }
-        case KW_go:         {t = next(f);  return new AstGoStmt(parseExpr(t));  }
-        case KW_return:     {t = next(f);  return new AstReturnStmt(parseExprList(t));  }
-        case KW_break:      {t = next(f);  return new AstBreakStmt(t.type == TK_ID ? t.lexeme : "");  }
-        case KW_continue:   {t = next(f);  return new AstContinueStmt(t.type == TK_ID ? t.lexeme : "");  }
-        case KW_goto:       {t = next(f);  return new AstGotoStmt(t.lexeme);  }
-        case KW_defer:      {t = next(f);  return new AstDeferStmt(parseExpr(t));  }
+        case KW_type: { return parseTypeDecl(t);  }
+        case KW_const: { return parseConstDecl(t);  }
+        case KW_var: { return parseVarDecl(t);  }
+        case KW_fallthrough: {t = next(f);  return new AstFallthroughStmt();  }
+        case KW_go: {t = next(f);  return new AstGoStmt(parseExpr(t));  }
+        case KW_return: {t = next(f);  return new AstReturnStmt(parseExprList(t));  }
+        case KW_break: {t = next(f);  return new AstBreakStmt(t.type == TK_ID ? t.lexeme : "");  }
+        case KW_continue: {t = next(f);  return new AstContinueStmt(t.type == TK_ID ? t.lexeme : "");  }
+        case KW_goto: {t = next(f);  return new AstGotoStmt(t.lexeme);  }
+        case KW_defer: {t = next(f);  return new AstDeferStmt(parseExpr(t));  }
 
         case KW_if:         return parseIfStmt(t);
         case KW_switch:     return parseSwitchStmt(t);
@@ -1236,7 +1215,7 @@ const AstNode* parse(const string & filename) {
         return nullptr;
     };
     parseSimpleStmt = [&](AstExprList* lhs, Token&t)->AstNode* {
-        if (t.type == KW_range){    //special case for ForStmt
+        if (t.type == KW_range) {    //special case for ForStmt
             auto*stmt = new AstSRangeClause;
             t = next(f);
             stmt->rhs = parseExpr(t);
@@ -1368,7 +1347,7 @@ const AstNode* parse(const string & filename) {
         auto * node = new AstSwitchStmt;
         if (t.type != OP_LBRACE) {
             node->init = parseSimpleStmt(nullptr, t);
-            if (t.type == OP_SEMI) t = next(f); 
+            if (t.type == OP_SEMI) t = next(f);
             if (t.type != OP_LBRACE) node->cond = parseSimpleStmt(nullptr, t);
         }
         eat(OP_LBRACE, "expec { after switch header");
@@ -1449,7 +1428,7 @@ const AstNode* parse(const string & filename) {
                     eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
                     node->cond = parseExpr(t);
                     eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
-                    if (t.type != OP_LBRACE)node->post = parseSimpleStmt(nullptr, t);  
+                    if (t.type != OP_LBRACE)node->post = parseSimpleStmt(nullptr, t);
                     break;
                 default:throw runtime_error("expect {/;/range/:=/=");
                 }
@@ -1474,9 +1453,8 @@ const AstNode* parse(const string & filename) {
         if (auto*tmp = parseUnaryExpr(t); tmp != nullptr) {
             node = new  AstExpr;
             node->lhs = tmp;
-            if (t.type == OP_OR || t.type == OP_AND || t.type == OP_EQ || t.type == OP_NE || t.type == OP_LT || t.type == OP_LE || t.type == OP_XOR ||
-                t.type == OP_GT || t.type == OP_GE || t.type == OP_ADD || t.type == OP_SUB || t.type == OP_BITOR || t.type == OP_XOR || t.type == OP_ANDXOR ||
-                t.type == OP_MUL || t.type == OP_DIV || t.type == OP_MOD || t.type == OP_LSHIFT || t.type == OP_RSHIFT || t.type == OP_BITAND ) {
+            if (anyone(t.type, OP_OR, OP_AND, OP_EQ, OP_NE, OP_LT, OP_LE, OP_XOR, OP_GT, OP_GE, OP_ADD,
+                OP_SUB, OP_BITOR, OP_XOR, OP_ANDXOR, OP_MUL, OP_DIV, OP_MOD, OP_LSHIFT, OP_RSHIFT, OP_BITAND)) {
                 node->op = t.type;
                 t = next(f);
                 node->rhs = parseExpr(t);
@@ -1588,8 +1566,8 @@ const AstNode* parse(const string & filename) {
                 }
                 else if (t.type == OP_LBRACE) {
                     // only operand has literal value, otherwise, treats it as a block
-                    if (typeid(*tmp) == typeid(AstArrayType) ||typeid(*tmp) == typeid(AstSliceType) ||
-                        typeid(*tmp) == typeid(AstStructType) ||typeid(*tmp) == typeid(AstMapType) ||
+                    if (typeid(*tmp) == typeid(AstArrayType) || typeid(*tmp) == typeid(AstSliceType) ||
+                        typeid(*tmp) == typeid(AstStructType) || typeid(*tmp) == typeid(AstMapType) ||
                         ((typeid(*tmp) == typeid(AstName) || typeid(*tmp) == typeid(AstSelectorExpr)) && nestLev >= 0)) {
                         // it's somewhat curious since official implementation treats literal type
                         // and literal value as separate parts
@@ -1598,7 +1576,7 @@ const AstNode* parse(const string & filename) {
                         e->litValue = parseLitValue(t);
                         tmp = e;
                     }
-                    else break; 
+                    else break;
                 }
                 else break;
             }
@@ -1637,7 +1615,7 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-    parseKeyedElement = [&](Token&t)->AstNode* {
+    parseKeyedElement = [&](Token&t)->AstKeyedElement* {
         AstKeyedElement*node{};
         if (auto*tmp = parseKey(t); tmp != nullptr) {
             node = new AstKeyedElement;
