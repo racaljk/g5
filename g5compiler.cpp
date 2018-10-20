@@ -122,48 +122,25 @@ struct AstIfStmt _ND {
     AstExpr* cond{};
     AstNode* ifBlock{}, *elseBlock{};
 };
-struct AstSwitchStmt _ND {
-    AstNode* init{};
-    AstNode* cond{};
-    vector<AstNode*> caseList{};
-};
 struct AstSwitchCase _ND {
     AstNode* exprList{};
     AstNode* stmtList{};
 };
-struct AstExprSwitchCase _ND {
-    AstNode * exprList{};
-    bool isDefault{};
+struct AstSwitchStmt _ND {
+    AstNode* init{};
+    AstNode* cond{};
+    vector<AstSwitchCase*> caseList{};
+};
+struct AstSelectCase _ND {
+    AstNode* cond;
+    AstStmtList* stmtList;
 };
 struct AstSelectStmt _ND {
-    vector<AstNode*> commClause;
-};
-struct AstCommClause _ND {
-    AstNode* commCase{};
-    AstNode* stmtList{};
-};
-struct AstCommCase _ND {
-    union {
-        AstNode* sendStmt;
-        AstNode* recvStmt;
-    }acc{};
-    bool isDefault{};
-};
-struct AstRecvStmt _ND {
-    union {
-        AstNode* identList;
-        AstNode* exprList;
-    }ars{};
-    AstNode* recvExpr{};
+    vector<AstSelectCase*> caseList;
 };
 struct AstForStmt _ND {
     AstNode* init{}, *cond{}, *post{};
     AstNode* block{};
-};
-struct AstForClause _ND {
-    AstNode* initStmt{};
-    AstNode* cond{};
-    AstNode* postStmt{};
 };
 struct AstSRangeClause _ND {
     vector<string> lhs;
@@ -748,21 +725,18 @@ const AstNode* parse(const string & filename) {
     LAMBDA_FUN(TypeDecl); LAMBDA_FUN(VarDecl); LAMBDA_FUN(ConstDecl); LAMBDA_FUN(LitValue);
     LAMBDA_FUN(ImportDecl); LAMBDA_FUN(Expr); LAMBDA_FUN(Signature); LAMBDA_FUN(UnaryExpr);
     LAMBDA_FUN(PrimaryExpr); LAMBDA_FUN(MethodSpec); LAMBDA_FUN(TypeSpec); LAMBDA_FUN(SwitchStmt);
-
+    LAMBDA_FUN(SelectCase); LAMBDA_FUN(SwitchCase);
     function<AstFuncDecl*(bool, Token&)> parseFuncDecl;
     function<AstNode*(AstExprList *, Token&)> parseSimpleStmt;
     function<AstStmtList*(Token&)> parseBlock;
     function<AstNode*(Token&)> parseTypeAssertion,parseType,
-        parseArrayOrSliceType, parseStructType, parsePointerType, parseFuncType,
+        parseArrayOrSliceType, parseStructType, parsePtrType, parseFuncType,
         parseParam, parseParamDecl, parseResult, parseInterfaceType,
-        parseMethodName, parseMapType, parseChannelType,
+        parseMapType, parseChanType,
         parseVarSpec, parseStmt,
-        parseFieldName, parseBasicLit,
-        parseLabeledStmt,
-        parseIfStmt, parseSwitchCase,
-        parseSelectStmt, parseForStmt, parseDeferStmt,
-        parseExprSwitchCase, parseCommClause, parseCommCase, parseRecvStmt, parseForClause,
-        parseRangeClause,
+        parseBasicLit,
+        parseIfStmt, 
+        parseSelectStmt, parseForStmt,
         parseOperand, 
         parseKeyedElement, parseKey;
 
@@ -1096,11 +1070,11 @@ const AstNode* parse(const string & filename) {
         case TK_ID:       return parseName(true, t);
         case OP_LBRACKET: return parseArrayOrSliceType(t);
         case KW_struct:   return parseStructType(t);
-        case OP_MUL:      return parsePointerType(t);
+        case OP_MUL:      return parsePtrType(t);
         case KW_func:     return parseFuncType(t);
         case KW_interface:return parseInterfaceType(t);
         case KW_map:      return parseMapType(t);
-        case KW_chan:     return parseChannelType(t);
+        case KW_chan:     return parseChanType(t);
         case OP_LPAREN:   {t = next(f); auto*tmp = parseType(t); t = next(f); return tmp; }
         default:return nullptr;
         }
@@ -1155,7 +1129,7 @@ const AstNode* parse(const string & filename) {
         eat(OP_SEMI, "expect ;");
         return node;
     };
-    parsePointerType = [&](Token&t)->AstNode* {
+    parsePtrType = [&](Token&t)->AstNode* {
         AstPtrType* node = new AstPtrType;
         eat(OP_MUL, "pointer type requires * to denote that");
         node->baseType = parseType(t);
@@ -1194,7 +1168,7 @@ const AstNode* parse(const string & filename) {
         node->elemType = parseType(t);
         return node;
     };
-    parseChannelType = [&](Token&t)->AstNode* {
+    parseChanType = [&](Token&t)->AstNode* {
         AstChanType* node{};
         if (t.type == KW_chan) {
             node = new AstChanType;
@@ -1418,60 +1392,31 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseSelectStmt = [&](Token&t)->AstNode* {
-        AstSelectStmt* node{};
-        if (t.type == KW_select) {
-            node = new AstSelectStmt;
-            expect(OP_LBRACE, "expect left brace in select statement");
-            do {
-                if (auto*tmp = parseCommClause(t); tmp != nullptr) {
-                    node->commClause.push_back(tmp);
-                }
-                t = next(f);
-            } while (t.type != OP_RBRACE);
-        }
+        eat(KW_select, "expect keyword select");
+        eat(OP_LBRACE, "expect { after select keyword");
+        auto* node = new AstSelectStmt;
+        do {
+            if (auto*tmp = parseSelectCase(t); tmp != nullptr) {
+                node->caseList.push_back(tmp);
+            }
+        } while (t.type != OP_RBRACE);
+        t = next(f);
         return node;
     };
-    parseCommClause = [&](Token&t)->AstNode* {
-        AstCommClause* node{};
-        if (auto*tmp = parseCommCase(t); tmp != nullptr) {
-            node = new AstCommClause;
-            node->commCase = tmp;
-            expect(OP_COLON, "expect colon in select case clause");
+    parseSelectCase = [&](Token&t)->AstSelectCase* {
+        AstSelectCase* node{};
+        if (t.type == KW_case) {
+            node = new AstSelectCase;
+            t = next(f);
+            auto*tmp = parseSimpleStmt(nullptr, t);
+            eat(OP_COLON, "statements in each case requires colon to separate");
             node->stmtList = parseStmtList(t);
         }
-        return node;
-    };
-    parseCommCase = [&](Token&t)->AstNode* {
-        AstCommCase*node{};
-        if (t.type == KW_case) {
-            node = new AstCommCase;
+        else if (t.type == KW_default) {
+            node = new AstSelectCase;
             t = next(f);
-            //todo
-            /*if (auto*tmp = parseSendStmt(t); tmp != nullptr) {
-                node->acc.sendStmt = tmp;
-            }
-            else if (auto*tmp = parseRecvStmt(t); tmp != nullptr) {
-                node->acc.recvStmt = tmp;
-            }
-            else if (t.type == KW_default) {
-                node->isDefault = true;
-            }*/
-        }
-        return node;
-    };
-    parseRecvStmt = [&](Token&t)->AstNode* {
-        AstRecvStmt*node{};
-        if (auto*tmp = parseExprList(t); tmp != nullptr) {
-            node = new AstRecvStmt;
-            node->ars.exprList = tmp;
-            expect(OP_EQ, "expect =");
-            node->recvExpr = parseExpr(t);
-        }
-        else if (auto*tmp = parseIdentList(t); tmp != nullptr) {
-            node = new AstRecvStmt;
-            node->ars.identList = tmp;
-            expect(OP_SHORTAGN, "expect :=");
-            node->recvExpr = parseExpr(t);
+            eat(OP_COLON, "expect : after default label");
+            node->stmtList = parseStmtList(t);
         }
         return node;
     };
@@ -1608,8 +1553,8 @@ const AstNode* parse(const string & filename) {
                 }
                 else if (t.type == OP_LBRACE) {
                     // only operand has literal value, otherwise, treats it as a block
-                    if (/*typeid(*tmp) != typeid(AstName) && */
-                        typeid(*tmp) != typeid(AstSelectorExpr) && 
+                    if (/*typeid(*tmp) != typeid(AstName) && 
+                        typeid(*tmp) != typeid(AstSelectorExpr) && */
                         typeid(*tmp) != typeid(AstArrayType) &&
                         typeid(*tmp) != typeid(AstSliceType) &&
                         typeid(*tmp) != typeid(AstStructType) &&
