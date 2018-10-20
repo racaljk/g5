@@ -19,4 +19,5 @@ script:
   - cd build
   - cmake ..
   - make -j8
+  - make test
 

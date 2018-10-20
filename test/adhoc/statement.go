@@ -7,6 +7,28 @@ import (
 	"strconv"
 	"strings"
 )
+func (d *digest) Write(p []byte) (nn int, err error) {
+	nn = len(p)
+	d.len += uint64(nn)
+	if d.nx > 0 {
+		n := copy(d.x[d.nx:], p)
+		d.nx += n
+		if d.nx == chunk {
+			block(d, d.x[:])
+			d.nx = 0
+		}
+		p = p[n:]
+	}
+	if len(p) >= chunk {
+		n := len(p) &^ (chunk - 1)
+		block(d, p[:n])
+		p = p[n:]
+	}
+	if len(p) > 0 {
+		d.nx = copy(d.x[:], p)
+	}
+	return
+}
 
 func selectstmt(){
     select {}  // block forever

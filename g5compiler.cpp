@@ -132,8 +132,8 @@ struct AstSwitchStmt _ND {
     vector<AstSwitchCase*> caseList{};
 };
 struct AstSelectCase _ND {
-    AstNode* cond;
-    AstStmtList* stmtList;
+    AstNode* cond{};
+    AstStmtList* stmtList{};
 };
 struct AstSelectStmt _ND {
     vector<AstSelectCase*> caseList;
@@ -147,7 +147,7 @@ struct AstSRangeClause _ND {
     AstExpr* rhs{};
 };
 struct AstRangeClause _ND {
-    AstExprList* lhs;
+    AstExprList* lhs{};
     TokenType op;
     AstExpr* rhs{};
 };
@@ -170,13 +170,13 @@ struct AstPrimaryExpr _ND {
     AstNode* expr{};//one of SelectorExpr, TypeSwitchExpr,TypeAssertionExpr,IndexExpr,SliceExpr,CallExpr,Operand
 };
 struct AstUnaryExpr _ND {
-    AstNode*expr;
+    AstNode*expr{};
     TokenType op{};
 };
 struct AstExpr _ND {
-    AstUnaryExpr* lhs;
+    AstUnaryExpr* lhs{};
     TokenType op{};
-    AstExpr* rhs;
+    AstExpr* rhs{};
 };
 struct AstSelectorExpr _ND {
     AstNode* operand{};
@@ -238,7 +238,7 @@ Token next(fstream& f) {
         c = static_cast<char>(f.peek());
         return oc;
     };
-    char c = static_cast<char>(f.peek());
+    auto c = static_cast<char>(f.peek());
 
 skip_comment_and_find_next:
 
@@ -856,7 +856,7 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseConstDecl = [&](Token&t)->AstConstDecl* {
-        AstConstDecl * node = new AstConstDecl;
+        auto * node = new AstConstDecl;
         eat(KW_const, "it should be const declaration");
         if (t.type == OP_LPAREN) {
             t = next(f);
@@ -900,7 +900,7 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseTypeDecl = [&](Token&t)->AstTypeDecl* {
-        AstTypeDecl* node = new AstTypeDecl;
+        auto * node = new AstTypeDecl;
         eat(KW_type, "it should be type declaration");
         if (t.type == OP_LPAREN) {
             t = next(f);
@@ -929,7 +929,7 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseVarDecl = [&](Token&t)->AstVarDecl* {
-        AstVarDecl* node = new AstVarDecl;
+        auto * node = new AstVarDecl;
         eat(KW_var, "it should be var declaration");
         if (t.type == OP_LPAREN) {
             do {
@@ -964,7 +964,7 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseFuncDecl = [&](bool anonymous, Token&t)->AstFuncDecl* {
-        AstFuncDecl * node = new AstFuncDecl;
+        auto * node = new AstFuncDecl;
         eat(KW_func, "it should be function declaration");
         if (!anonymous) {
             if (t.type == OP_LPAREN) {
@@ -1105,7 +1105,7 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseStructType = [&](Token&t)->AstNode* {
-        AstStructType* node = new  AstStructType;
+        auto * node = new  AstStructType;
         eat(KW_struct, "structure type requires struct keyword");
         eat(OP_LBRACE, "a { is required after struct");
         do {
@@ -1133,13 +1133,13 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parsePtrType = [&](Token&t)->AstNode* {
-        AstPtrType* node = new AstPtrType;
+        auto * node = new AstPtrType;
         eat(OP_MUL, "pointer type requires * to denote that");
         node->baseType = parseType(t);
         return node;
     };
     parseInterfaceType = [&](Token&t)->AstNode* {
-        AstInterfaceType* node = new AstInterfaceType;
+        auto * node = new AstInterfaceType;
         eat(KW_interface, "interface type requires keyword interface");
         eat(OP_LBRACE, "{ is required after interface");
         while (t.type != OP_RBRACE) {
@@ -1152,8 +1152,8 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseMethodSpec = [&](Token&t)->AstMethodSpec* {
-        AstMethodSpec* node = new AstMethodSpec;
-        if (auto* tmp = parseName(true, t); tmp != nullptr && tmp->name.find(".") == string::npos) {
+        auto * node = new AstMethodSpec;
+        if (auto* tmp = parseName(true, t); tmp != nullptr && tmp->name.find('.') == string::npos) {
             node->name = tmp;
             node->signature = parseSignature(t);
         }
@@ -1163,7 +1163,7 @@ const AstNode* parse(const string & filename) {
         return node;
     };
     parseMapType = [&](Token&t)->AstNode* {
-        AstMapType* node = new AstMapType;
+        auto * node = new AstMapType;
         eat(KW_map, "map type requires keyword map to denote that");
         eat(OP_LBRACKET, "[ is required after map");
         node->keyType = parseType(t);
@@ -1257,13 +1257,13 @@ const AstNode* parse(const string & filename) {
         case OP_INC:case OP_DEC: {
             if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
             auto* stmt = new AstIncDecStmt;
-            stmt->isInc = t.type == OP_INC ? true : false;
+            stmt->isInc = t.type == OP_INC;
             t = next(f);
             stmt->expr = lhs->exprList[0];
             return stmt;
         }
         case OP_SHORTAGN: {
-            if (lhs->exprList.size() == 0) throw runtime_error("one expr required");
+            if (lhs->exprList.empty()) throw runtime_error("one expr required");
 
             vector<string> identList;
             for (auto* e : lhs->exprList) {
@@ -1291,7 +1291,7 @@ const AstNode* parse(const string & filename) {
         }
         case OP_ADDAGN:case OP_SUBAGN:case OP_BITORAGN:case OP_BITXORAGN:case OP_MULAGN:case OP_DIVAGN:
         case OP_MODAGN:case OP_LSFTAGN:case OP_RSFTAGN:case OP_BITANDAGN:case OP_ANDXORAGN:case OP_AGN: {
-            if (lhs->exprList.size() == 0) throw runtime_error("one expr required");
+            if (lhs->exprList.empty()) throw runtime_error("one expr required");
             auto op = t.type;
             t = next(f);
             if (t.type == KW_range) {
@@ -1337,7 +1337,7 @@ const AstNode* parse(const string & filename) {
         const int outLev = nestLev;
         nestLev = -1;
         eat(KW_if, "expect keyword if");
-        AstIfStmt* node = new AstIfStmt;
+        auto * node = new AstIfStmt;
         if (t.type == OP_LBRACE) throw runtime_error("if statement requires a condition");
         auto* tmp = parseSimpleStmt(nullptr, t);
         if (t.type == OP_SEMI) {
@@ -1366,7 +1366,7 @@ const AstNode* parse(const string & filename) {
         const int outLev = nestLev;
         nestLev = -1;
         eat(KW_switch, "expect keyword switch");
-        AstSwitchStmt* node = new AstSwitchStmt;
+        auto * node = new AstSwitchStmt;
         if (t.type != OP_LBRACE) {
             node->init = parseSimpleStmt(nullptr, t);
             if (t.type == OP_SEMI) t = next(f); 
@@ -1475,9 +1475,9 @@ const AstNode* parse(const string & filename) {
         if (auto*tmp = parseUnaryExpr(t); tmp != nullptr) {
             node = new  AstExpr;
             node->lhs = tmp;
-            if (t.type == OP_OR || t.type == OP_AND || t.type == OP_EQ || t.type == OP_NE || t.type == OP_LT || t.type == OP_LE || t.type == OP_XOR||
-                t.type == OP_GT || t.type == OP_GE || t.type == OP_ADD || t.type == OP_SUB || t.type == OP_BITOR || t.type == OP_XOR ||
-                t.type == OP_MUL || t.type == OP_DIV || t.type == OP_MOD || t.type == OP_LSHIFT || t.type == OP_RSHIFT || t.type == OP_BITAND) {
+            if (t.type == OP_OR || t.type == OP_AND || t.type == OP_EQ || t.type == OP_NE || t.type == OP_LT || t.type == OP_LE || t.type == OP_XOR ||
+                t.type == OP_GT || t.type == OP_GE || t.type == OP_ADD || t.type == OP_SUB || t.type == OP_BITOR || t.type == OP_XOR || t.type == OP_ANDXOR ||
+                t.type == OP_MUL || t.type == OP_DIV || t.type == OP_MOD || t.type == OP_LSHIFT || t.type == OP_RSHIFT || t.type == OP_BITAND ) {
                 node->op = t.type;
                 t = next(f);
                 node->rhs = parseExpr(t);
@@ -1631,7 +1631,7 @@ const AstNode* parse(const string & filename) {
     };
 
     parseBasicLit = [&](Token&t)->AstNode* {
-        AstBasicLit* node = new AstBasicLit;
+        auto * node = new AstBasicLit;
         node->type = t.type;
         node->value = t.lexeme;
         t = next(f);
