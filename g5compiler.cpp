@@ -24,9 +24,7 @@
 #define REPORT_ERR(PRE,STR) \
 fprintf(stderr,"%s:%s at line %d, col %d\n",#PRE,#STR,line,column);\
 exit(EXIT_FAILURE);
-
 using namespace std;
-
 //===---------------------------------------------------------------------------------------===//
 // global data
 //===---------------------------------------------------------------------------------------===//
@@ -37,9 +35,10 @@ string keywords[] = { "break",    "default",     "func",   "interface", "select"
                      "continue", "for",         "import", "return",    "var" };
 static int line = 1, column = 1, lastToken = 0, shouldEof = 0, nestLev = 0;
 static struct goruntime {} grt;
-auto anyone = [](auto&& k, auto&&... args) ->bool { return ((args == k) || ...); };
+static auto anyone = [](auto&& k, auto&&... args) ->bool { return ((args == k) || ...); };
 //===---------------------------------------------------------------------------------------===//
-// various declarations 
+// various declarations which contains TokenType for lexical analysis and AST node definitions 
+// for syntax parsing
 //===---------------------------------------------------------------------------------------===//
 #pragma region GlobalDecl
 enum TokenType : signed int {
@@ -53,7 +52,7 @@ enum TokenType : signed int {
     OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORAGN, TK_ID, LIT_INT, LIT_FLOAT, LIT_IMG, 
     LIT_RUNE, LIT_STR, TK_EOF = -1,
 };
-//todo: add destructor for these structures
+// TODO: add destructor for them
 // Common
 #define _S :public Stmt
 #define _E :public Expr
@@ -62,9 +61,8 @@ struct UnaryExpr;
 struct Node                { virtual ~Node() = default; };
 struct Expr             _N { UnaryExpr* lhs{}; TokenType op{}; Expr* rhs{}; };
 struct UnaryExpr        _E { Expr*expr{}; TokenType op{}; };
-struct PrimaryExpr      _E { Node* expr{}; };// one of SelectorExpr, TypeSwitchExpr,TypeAssertionExpr,IndexExpr,SliceExpr,CallExpr,Operand
-
-struct Stmt _N {};
+struct PrimaryExpr      _E { Expr* expr{}; };
+struct Stmt             _N {};
 struct IdentList        _E { vector<string> identList; };
 struct ExprList         _E { vector<Expr*> exprList; };
 struct StmtList         _E { vector<Stmt*> stmtList; };
@@ -92,10 +90,10 @@ struct IncDecStmt       _S { Expr* expr{}; bool isInc{}; };
 struct AssignStmt       _S { ExprList* lhs{}, *rhs{}; TokenType op{}; };
 struct SAssignStmt      _S { vector<string> lhs{}; ExprList* rhs{}; };
 // Expression
-struct SelectorExpr     _E { Expr* operand{}; string selector; };
-struct TypeSwitchExpr   _E { Expr* operand{}; };
-struct TypeAssertionExpr _E { Expr* operand{}, *type{}; };
-struct IndexExpr        _E { Expr* operand{}, *index{}; };
+struct SelectorExpr     _E { Expr* operand{}; string selector; SelectorExpr(Expr*e, string s):operand(e),selector(s) {} };
+struct TypeSwitchExpr   _E { Expr* operand{}; TypeSwitchExpr(Expr*e) :operand(e) {} };
+struct TypeAssertExpr   _E { Expr* operand{}, *type{}; TypeAssertExpr(Expr*e, Expr *t) :operand(e), type(t) {} };
+struct IndexExpr        _E { Expr* operand{}, *index{}; IndexExpr(Expr*e, Expr*i) :operand(e), index(i) {} };
 struct SliceExpr        _E { Expr* operand{}, *begin{}, *end{}, *step{}; };
 struct CallExpr         _E { Expr* operand{}, *type{}; ExprList* arguments{}; bool isVariadic{}; };
 struct KeyedElement        { Expr*key{}, *elem{}; };
@@ -105,12 +103,11 @@ struct CompositeLit     _E { Expr* litName{}; LitValue* litValue{}; };
 struct Name             _E { string name; };
 struct ArrayType        _E { Expr* len{}; Expr* elem{}; bool autoLen; };
 struct StructType       _E { vector<tuple<Expr*, Expr*, string, bool>> fields; };
-struct PtrType          _E { Expr* elem{}; };
+struct PtrType          _E { Expr* elem{}; PtrType(Expr*e) :elem(e) {} };
 struct ParamDecl           { bool isVariadic = false, hasName = false; Expr* type{}; string name; };
 struct Param               { vector<ParamDecl*> paramList; };
 struct Signature           { Param* param{}, *resultParam{}; Expr* resultType{}; };
-struct FuncType         _E { Signature * signature{}; };
-struct LambdaFunc       _E { Signature* signature{}; BlockStmt* funcBody{}; };
+struct FuncType         _E { Signature * signature{};FuncType(Signature* s):signature(s){} };
 struct InterfaceType    _E { vector<tuple<Name*, Signature*>> method; };
 struct SliceType        _E { Expr* elem{}; };
 struct MapType          _E { Expr* type{}; Node* elem{}; };
@@ -122,7 +119,7 @@ struct TypeSpec            { string ident; Node* type; };
 struct TypeDecl         _S { vector<TypeSpec*> typeSpec; };
 struct VarSpec             { IdentList* identList{}; ExprList* exprList{}; Expr* type{}; };
 struct VarDecl          _S { vector<VarSpec*> varSpec; };
-struct FuncDecl            {string funcName;Param* receiver{};Signature* signature{};BlockStmt* funcBody{};};
+struct FuncDecl:public Stmt,Expr{ string funcName;Param* receiver{};Signature* signature{};BlockStmt* funcBody{};};
 struct CompilationUnit {
     string package;
     vector<ImportDecl*> importDecl;
@@ -162,9 +159,7 @@ skip_comment_and_find_next:
         consumePeek(c);
     }
     if (f.eof()) {
-        if (shouldEof) {
-            return Token(TK_EOF, "");
-        }
+        if (shouldEof) return Token(TK_EOF, "");
         shouldEof = 1;
         return Token(OP_SEMI, ";");
     }
@@ -257,7 +252,9 @@ skip_comment_and_find_next:
         if (c == '\\') {
             lexeme += consumePeek(c);
             if (anyone(c, 'U', 'u', 'X', 'x'))
-                do lexeme += consumePeek(c); while (c >= '0'&&c <= '9' || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
+                do 
+                    lexeme += consumePeek(c); 
+                while (c >= '0'&&c <= '9' || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
             else if (c >= '0' && c <= '7')
                 do lexeme += consumePeek(c); while (c >= '0' && c <= '7');
             else if (anyone(c, 'a', 'b', 'f', 'n', 'r', 't', 'v', '\\', '\'', '"'))
@@ -392,11 +389,8 @@ const auto parse(const string & filename) {
     };
     auto eatOptionalSemi = [&]() { if (t.type == OP_SEMI) t = next(f); };
 
-    LAMBDA_FUN(LitValue);
-    LAMBDA_FUN(Expr); LAMBDA_FUN(UnaryExpr);
-    LAMBDA_FUN(PrimaryExpr); 
-    LAMBDA_FUN(Stmt); LAMBDA_FUN(IfStmt);
-
+    LAMBDA_FUN(LitValue);LAMBDA_FUN(Expr); LAMBDA_FUN(UnaryExpr);
+    LAMBDA_FUN(PrimaryExpr); LAMBDA_FUN(Stmt); LAMBDA_FUN(IfStmt);
     function<Expr*(Token&)> parseType;
 
 #pragma region Common
@@ -446,9 +440,7 @@ const auto parse(const string & filename) {
         StmtList * node{};
         Stmt* tmp = nullptr;
         while ((tmp = parseStmt(t))) {
-            if (node == nullptr) {
-                node = new StmtList;
-            }
+            if (node == nullptr) node = new StmtList;
             node->stmtList.push_back(tmp);
             eatOptionalSemi();
         }
@@ -462,9 +454,7 @@ const auto parse(const string & filename) {
             if (t.type != OP_RBRACE) {
                 node->stmtList = parseStmtList(t);
                 eat(OP_RBRACE, "expect } around code block");
-            } else {
-                t = next(f);
-            }
+            } else t = next(f);
         }
         return node;
     };
@@ -672,23 +662,16 @@ const auto parse(const string & filename) {
         }
         return node;
     };
-    auto parseFuncDecl = [&](Token&t){
+    auto parseFuncDecl = [&](bool anonymous, Token&t){
         auto * node = new FuncDecl;
         eat(KW_func, "it should be function declaration");
-        if (t.type == OP_LPAREN) {
-            node->receiver = parseParam(t);
+        if (!anonymous) {
+            if (t.type == OP_LPAREN) {
+                node->receiver = parseParam(t);
+            }
+            node->funcName = t.lexeme;
+            t = next(f);
         }
-        node->funcName = t.lexeme;
-        t = next(f);
-        node->signature = parseSignature(t);
-        nestLev++;
-        node->funcBody = parseBlock(t);
-        nestLev--;
-        return node;
-    };
-    auto parseLambdaFunc = [&](Token&t) {
-        auto * node = new LambdaFunc;
-        eat(KW_func, "it should be function declaration");
         node->signature = parseSignature(t);
         nestLev++;
         node->funcBody = parseBlock(t);
@@ -750,12 +733,6 @@ const auto parse(const string & filename) {
         eatOptionalSemi();
         return node;
     };
-    auto parsePtrType = [&](Token&t)->PtrType* {
-        auto * node = new PtrType;
-        eat(OP_MUL, "pointer type requires * to denote that");
-        node->elem = parseType(t);
-        return node;
-    };
     auto parseInterfaceType = [&](Token&t){
         auto * node = new InterfaceType;
         eat(KW_interface, "interface type requires keyword interface");
@@ -803,23 +780,17 @@ const auto parse(const string & filename) {
         }
         return node;
     };
-    auto parseFuncType = [&](Token&t){
-        auto* node = new FuncType;
-        t = next(f);
-        node->signature = parseSignature(t);
-        return node;
-    };
     parseType = [&](Token&t)->Expr* {
         switch (t.type) {
+        case OP_MUL:      {t = next(f); return new PtrType(parseType(t)); }
+        case KW_func:     {t = next(f); return new FuncType(parseSignature(t)); }
+        case OP_LPAREN:   {t = next(f); auto*tmp = parseType(t); t = next(f); return tmp; }
         case TK_ID:       return parseName(true, t);
         case OP_LBRACKET: return parseArrayOrSliceType(t);
         case KW_struct:   return parseStructType(t);
-        case OP_MUL:      return parsePtrType(t);
-        case KW_func:     return parseFuncType(t);
         case KW_interface:return parseInterfaceType(t);
         case KW_map:      return parseMapType(t);
         case KW_chan:     return parseChanType(t);
-        case OP_LPAREN: {t = next(f); auto*tmp = parseType(t); t = next(f); return tmp; }
         default:return nullptr;
         }
     };
@@ -920,9 +891,8 @@ const auto parse(const string & filename) {
             t = next(f);
             node->cond = parseExpr(t);
         }
-        else {
-            node->cond = dynamic_cast<ExprStmt*>(tmp)->expr;
-        }
+        else node->cond = dynamic_cast<ExprStmt*>(tmp)->expr;
+
         node->ifBlock = parseBlock(t);
         if (t.type == KW_else) {
             t = next(f);
@@ -1017,8 +987,7 @@ const auto parse(const string & filename) {
                 switch (t.type) {
                 case OP_LBRACE:
                     node->cond = tmp;
-                    if (typeid(*tmp) == typeid(SRangeClause) || typeid(*tmp) == typeid(RangeClause))
-                        nestLev = outLev;
+                    if (anyone(typeid(*tmp), typeid(SRangeClause), typeid(RangeClause))) nestLev = outLev;
                     break;
                 case OP_SEMI:
                     node->init = tmp;
@@ -1045,16 +1014,16 @@ const auto parse(const string & filename) {
     };
     parseStmt = [&](Token&t)->Stmt* {
         switch (t.type) {
-        case KW_type: { return parseTypeDecl(t);  }
-        case KW_const: { return parseConstDecl(t);  }
-        case KW_var: { return parseVarDecl(t);  }
-        case KW_fallthrough: {t = next(f);  return new FallthroughStmt();  }
-        case KW_go: {t = next(f);  return new GoStmt(parseExpr(t));  }
-        case KW_return: {t = next(f);  return new ReturnStmt(parseExprList(t));  }
-        case KW_break: {t = next(f);  return new BreakStmt(t.type == TK_ID ? t.lexeme : "");  }
-        case KW_continue: {t = next(f);  return new ContinueStmt(t.type == TK_ID ? t.lexeme : "");  }
-        case KW_goto: {t = next(f);  return new GotoStmt(t.lexeme);  }
-        case KW_defer: {t = next(f);  return new DeferStmt(parseExpr(t));  }
+        case KW_type:  	    return parseTypeDecl(t);
+        case KW_const:      return parseConstDecl(t);
+        case KW_var:        return parseVarDecl(t);
+        case KW_fallthrough:t = next(f);  return new FallthroughStmt();
+        case KW_go:         t = next(f);  return new GoStmt(parseExpr(t));
+        case KW_return:     t = next(f);  return new ReturnStmt(parseExprList(t));
+        case KW_break:      t = next(f);  return new BreakStmt(t.type == TK_ID ? t.lexeme : "");
+        case KW_continue:   t = next(f);  return new ContinueStmt(t.type == TK_ID ? t.lexeme : "");
+        case KW_goto:       t = next(f);  return new GotoStmt(t.lexeme);
+        case KW_defer:      t = next(f);  return new DeferStmt(parseExpr(t));
         case KW_if:         return parseIfStmt(t);
         case KW_switch:     return parseSwitchStmt(t);
         case KW_select:     return parseSelectStmt(t);
@@ -1069,12 +1038,11 @@ const auto parse(const string & filename) {
             if (t.type == OP_COLON) {
                 //it shall a labeled statement(not part of simple stmt so we handle it here)
                 t = next(f);
-                auto* labeledStmt = new LabeledStmt;
-                labeledStmt->label = dynamic_cast<Name*>(
-                    dynamic_cast<PrimaryExpr*>(
-                        exprList->exprList[0]->lhs->expr)->expr)->name;
-                labeledStmt->stmt = parseStmt(t);
-                return labeledStmt;
+                auto* s = new LabeledStmt;
+                s->label = dynamic_cast<Name*>(
+                    dynamic_cast<PrimaryExpr*>(exprList->exprList[0]->lhs->expr)->expr)->name;
+                s->stmt = parseStmt(t);
+                return s;
             } else return parseSimpleStmt(exprList, t);
         }
         }
@@ -1115,9 +1083,14 @@ const auto parse(const string & filename) {
         if (t.type == TK_ID) {
             return parseName(false, t);
         } else if (t.type == KW_func) {
-            return parseLambdaFunc(t);
+            return parseFuncDecl(true, t);
         } else if (t.type == OP_LPAREN) {
-            t = next(f); nestLev++; auto* e = parseExpr(t); nestLev--; eat(OP_RPAREN, "expect )"); return e;
+            t = next(f); 
+            nestLev++; 
+            auto* e = parseExpr(t); 
+            nestLev--; 
+            eat(OP_RPAREN, "expect )"); 
+            return e;
         } else if (anyone(t.type, LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR)) {
             auto*tmp = new BasicLit(t.type, t.lexeme); t = next(f); return tmp;
         } else if (anyone(t.type, KW_struct, KW_map, OP_LBRACKET, KW_chan, KW_interface)) {
@@ -1135,25 +1108,17 @@ const auto parse(const string & filename) {
                 if (t.type == OP_DOT) {
                     t = next(f);
                     if (t.type == TK_ID) {
-                        auto* e = new SelectorExpr;
-                        e->operand = tmp;
-                        e->selector = t.lexeme;
-                        tmp = e;
+                        tmp = new SelectorExpr(tmp, t.lexeme);
                         t = next(f);
                     }
                     else if (t.type == OP_LPAREN) {
                         t = next(f);
                         if (t.type == KW_type) {
-                            auto* e = new TypeSwitchExpr;
-                            e->operand = tmp;
-                            tmp = e;
+                            tmp = new TypeSwitchExpr(tmp);
                             t = next(f);
                         }
                         else {
-                            auto* e = new TypeAssertionExpr;
-                            e->operand = tmp;
-                            e->type = parseType(t);
-                            tmp = e;
+                            tmp = new TypeAssertExpr(tmp, parseType(t));
                         }
                         eat(OP_RPAREN, "expect )");
                     }
@@ -1165,10 +1130,7 @@ const auto parse(const string & filename) {
                     if (t.type != OP_COLON) {
                         start = parseExpr(t);
                         if (t.type == OP_RBRACKET) {
-                            auto* e = new IndexExpr;
-                            e->operand = tmp;
-                            e->index = start;
-                            tmp = e;
+                            tmp = new IndexExpr(tmp, start);
                             t = next(f);
                             nestLev--;
                             continue;
@@ -1273,8 +1235,8 @@ const auto parse(const string & filename) {
         case KW_const:  node->constDecl.push_back(parseConstDecl(t));       break;
         case KW_type:   node->typeDecl.push_back(parseTypeDecl(t));         break;
         case KW_var:    node->varDecl.push_back(parseVarDecl(t));           break;
-        case KW_func:   node->funcDecl.push_back(parseFuncDecl(t));  break;
-        case OP_SEMI:   t = next(f); break;
+        case KW_func:   node->funcDecl.push_back(parseFuncDecl(false, t));  break;
+        case OP_SEMI:   t = next(f);                                        break;
         default:        {REPORT_ERR("syntax error","unknown top level declaration"); }
         }
     }
