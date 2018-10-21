@@ -1,10 +1,16 @@
-//===----------------------------------------------------------------------===//
-// Minimalism guided practice of golang compiler and runtime bundled 
-// implementation, I try to do all works within 5 explicit functions ( lambda is
-// not regarded as the *explicit function*.
+//===---------------------------------------------------------------------------------------===//
+// g5 : golang compiler and runtime in 5 named functions
+// Copyright (C) 2018 racaljk<1948638989@qq.com>.
 //
-// Written by racaljk@github<1948638989@qq.com>
-//===----------------------------------------------------------------------===//
+// This program is free software: you can redistribute it and/or modify it under the terms of the 
+// GNU General Public License as published by the Free Software Foundation, either version 3 of 
+// the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
+// even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU 
+// General Public License for more details. You should have received a copy of the GNU General 
+// Public License along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//===---------------------------------------------------------------------------------------===//
 #include <cstdio>
 #include <exception>
 #include <fstream>
@@ -14,21 +20,38 @@
 #include <tuple>
 #include <map>
 #define LAMBDA_FUN(X) function<Ast##X*(Token&)> parse##X;
+#define REPORT_ERR(PRE,STR) \
+fprintf(stderr,PRE##": "##STR##" at line %d, col %d\n",line,column);\
+exit(EXIT_FAILURE);
 #define _ND :public AstNode
 using namespace std;
 
-//===----------------------------------------------------------------------===//
+//===---------------------------------------------------------------------------------------===//
+// global data
+//===---------------------------------------------------------------------------------------===//
+string keywords[] = { "break",    "default",     "func",   "interface", "select",
+                     "case",     "defer",       "go",     "map",       "struct",
+                     "chan",     "else",        "goto",   "package",   "switch",
+                     "const",    "fallthrough", "if",     "range",     "type",
+                     "continue", "for",         "import", "return",    "var" };
+static int line = 1, column = 1, lastToken = 0, shouldEof = 0, nestLev = 0;
+static struct goruntime {
+    string package;
+} grt;
+auto anyone = [](auto&& k, auto&&... args) ->bool { return ((args == k) || ...); };
+//===---------------------------------------------------------------------------------------===//
 // various declarations 
-//===----------------------------------------------------------------------===//
+//===---------------------------------------------------------------------------------------===//
+#pragma region GlobalDecl
 enum TokenType : signed int {
     INVALID = 0, KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case,
     KW_defer, KW_go, KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package,
     KW_switch, KW_const, KW_fallthrough, KW_if, KW_range, KW_type, KW_continue,
-    KW_for, KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDAGN, OP_BITANDAGN,
+    KW_for, KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDAGN, OP_SHORTAGN, 
     OP_AND, OP_EQ, OP_NE, OP_LPAREN, OP_RPAREN, OP_SUB, OP_BITOR, OP_SUBAGN,
     OP_BITORAGN, OP_OR, OP_LT, OP_LE, OP_LBRACKET, OP_RBRACKET, OP_MUL, OP_XOR,
     OP_MULAGN, OP_BITXORAGN, OP_CHAN, OP_GT, OP_GE, OP_LBRACE, OP_RBRACE,
-    OP_DIV, OP_LSHIFT, OP_DIVAGN, OP_LSFTAGN, OP_INC, OP_AGN, OP_SHORTAGN,
+    OP_DIV, OP_LSHIFT, OP_DIVAGN, OP_LSFTAGN, OP_INC, OP_AGN, OP_BITANDAGN,
     OP_COMMA, OP_SEMI, OP_MOD, OP_RSHIFT, OP_MODAGN, OP_RSFTAGN, OP_DEC,
     OP_NOT, OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORAGN, TK_ID,
     LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR, TK_EOF = -1,
@@ -211,24 +234,14 @@ struct AstBasicLit _ND {
     AstBasicLit(TokenType t, const string&s) :type(t), value(s) {} 
 };
 struct AstCompositeLit _ND { AstNode* litName{}; AstLitValue* litValue{}; };
-//===----------------------------------------------------------------------===//
-// global data
-//===----------------------------------------------------------------------===//
-string keywords[] = { "break",    "default",     "func",   "interface", "select",
-                     "case",     "defer",       "go",     "map",       "struct",
-                     "chan",     "else",        "goto",   "package",   "switch",
-                     "const",    "fallthrough", "if",     "range",     "type",
-                     "continue", "for",         "import", "return",    "var" };
-static int line = 1, column = 1, lastToken = -1, shouldEof = 0, nestLev = 0;
-struct Token { TokenType type{}; string lexeme; };
-static struct goruntime {
-    string package;
-} grt;
-auto anyone = [](int k, auto... args) ->bool { return ((args == k) || ...); };
-
-//===----------------------------------------------------------------------===//
+struct Token { 
+    TokenType type{}; string lexeme;
+    Token(TokenType t, string e) :type(t), lexeme(e) { lastToken = t; }
+};
+#pragma endregion
+//===---------------------------------------------------------------------------------------===//
 // Implementation of golang compiler and runtime within 5 functions
-//===----------------------------------------------------------------------===//
+//===---------------------------------------------------------------------------------------===//
 Token next(fstream& f) {
     auto consumePeek = [&](char& c) {
         f.get();
@@ -247,20 +260,17 @@ skip_comment_and_find_next:
             if (anyone(lastToken, TK_ID, LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR, KW_fallthrough,
                 KW_continue, KW_return, KW_break, OP_INC, OP_DEC, OP_RPAREN, OP_RBRACKET, OP_RBRACE)) {
                 consumePeek(c);
-                lastToken = OP_SEMI;
-                return Token{ OP_SEMI, ";" };
+                return Token(OP_SEMI, ";");
             }
         }
         consumePeek(c);
     }
     if (f.eof()) {
         if (shouldEof) {
-            lastToken = TK_EOF;
-            return Token{ TK_EOF, "" };
+            return Token(TK_EOF, "");
         }
         shouldEof = 1;
-        lastToken = OP_SEMI;
-        return Token{ OP_SEMI, ";" };
+        return Token(OP_SEMI, ";");
     }
 
     string lexeme;
@@ -272,11 +282,9 @@ skip_comment_and_find_next:
 
         for (int i = 0; i < sizeof(keywords) / sizeof(keywords[0]); i++)
             if (keywords[i] == lexeme) {
-                lastToken = static_cast<TokenType>(i + 1);
-                return Token{ static_cast<TokenType>(i + 1), lexeme };
+                return Token(static_cast<TokenType>(i + 1), lexeme);
             }
-        lastToken = TK_ID;
-        return Token{ TK_ID, lexeme };
+        return Token(TK_ID, lexeme);
     }
 
     // int_lit     = decimal_lit | octal_lit | hex_lit .
@@ -298,8 +306,7 @@ skip_comment_and_find_next:
                 do {
                     lexeme += consumePeek(c);
                 } while (c >= '0'&&c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F');
-                lastToken = LIT_INT;
-                return Token{ LIT_INT, lexeme };
+                return Token(LIT_INT, lexeme);
             } else if ((c >= '0' && c <= '9') || anyone(c, '.', 'e', 'E', 'i')) {
                 while ((c >= '0' && c <= '9') || anyone(c, '.', 'e', 'E', 'i')) {
                     if (c >= '0' && c <= '7') {
@@ -308,8 +315,7 @@ skip_comment_and_find_next:
                         goto shall_float;
                     }
                 }
-                lastToken = LIT_INT;
-                return Token{ LIT_INT, lexeme };
+                return Token(LIT_INT, lexeme);
             }
             goto may_float;
         } else {  // 1-9 or . or just a single 0
@@ -321,16 +327,12 @@ skip_comment_and_find_next:
                     lexeme += consumePeek(c);
                     if (c == '.') {
                         lexeme += consumePeek(c);
-                        lastToken = OP_VARIADIC;
-                        return Token{ OP_VARIADIC, lexeme };
-                    } else {
-                        fprintf(stderr,"expect variadic notation(...)");
-                    }
+                        return Token(OP_VARIADIC, lexeme);
+                    } else { REPORT_ERR("lex error", "expect variadic notation(...)"); }
                 } else if (c >= '0'&&c <= '9') {
                     type = LIT_FLOAT;
                 } else {
-                    lastToken = OP_DOT;
-                    return Token{ OP_DOT, "." };
+                    return Token(OP_DOT, lexeme);
                 }
                 goto shall_float;
             } else if (c >= '1'&&c <= '9') {
@@ -355,21 +357,15 @@ skip_comment_and_find_next:
                         f.get();
                         column++;
                         lexeme += c;
-                        lastToken = LIT_IMG;
-                        return Token{ LIT_IMG, lexeme };
+                        return Token(LIT_IMG, lexeme);
                     }
                 }
-                lastToken = type;
-                return Token{ type, lexeme };
+                return Token(type, lexeme);
             } else {
-                lastToken = type;
-                return Token{ type, lexeme };
+                return Token(type, lexeme);
             }
         }
     }
-
-    //! NOT FULLY SUPPORT UNICODE RELATED LITERALS
-
     // rune_lit         = "'" ( unicode_value | byte_value ) "'" .
     // unicode_value    = unicode_char | little_u_value | big_u_value |
     // escaped_char . byte_value       = octal_byte_value | hex_byte_value .
@@ -384,32 +380,20 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         if (c == '\\') {
             lexeme += consumePeek(c);
-
-            if (anyone(c, 'U', 'u', 'X', 'x')) {
-                do {
-                    lexeme += consumePeek(c);
-                } while (c >= '0'&&c <= '9' || (c >= 'a' && c <= 'f') ||
-                    (c >= 'A' && c <= 'F'));
-            } else if (c >= '0' && c <= '7') {
-                do {
-                    lexeme += consumePeek(c);
-                } while (c >= '0' && c <= '7');
-            } else if (anyone(c, 'a', 'b', 'f', 'n', 'r', 't', 'v', '\\', '\'', '"')) {
+            if (anyone(c, 'U', 'u', 'X', 'x'))
+                do lexeme += consumePeek(c); while (c >= '0'&&c <= '9' || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
+            else if (c >= '0' && c <= '7')
+                do lexeme += consumePeek(c); while (c >= '0' && c <= '7');
+            else if (anyone(c, 'a', 'b', 'f', 'n', 'r', 't', 'v', '\\', '\'', '"'))
                 lexeme += consumePeek(c);
-            } else {
-                fprintf(stderr, "illegal rune");
-            }
-
-        } else {
-            lexeme += consumePeek(c);
-        }
-
+            else { REPORT_ERR("lex error", "illegal rune"); }
+        } else lexeme += consumePeek(c);
+        
         if (c != '\'') {
-            fprintf(stderr,"illegal rune at least in current implementation of g8");
+            REPORT_ERR("lex error", "illegal rune at least in current implementation of g8");
         }
         lexeme += consumePeek(c);
-        lastToken = LIT_RUNE;
-        return Token{ LIT_RUNE, lexeme };
+        return Token(LIT_RUNE, lexeme);
     }
 
     // string_lit             = raw_string_lit | interpreted_string_lit .
@@ -421,11 +405,10 @@ skip_comment_and_find_next:
             if (c == '\n') line++;
         } while (f.good() && c != '`');
         if (c != '`') {
-            fprintf(stderr,"raw string literal does not have a closed symbol \"`\"");
+            REPORT_ERR("lex error", "raw string literal does not have a closed symbol \"`\"");
         }
         lexeme += consumePeek(c);
-        lastToken = LIT_STR;
-        return Token{ LIT_STR, lexeme };
+        return Token(LIT_STR, lexeme);
     } else if (c == '"') {
         do {
             lexeme += consumePeek(c);
@@ -435,11 +418,10 @@ skip_comment_and_find_next:
             }
         } while (f.good() && (c != '\n' && c != '\r' && c != '"'));
         if (c != '"') {
-            fprintf(stderr,R"(string literal does not have a closed symbol """)");
+            REPORT_ERR("lex error", "string literal does not have a closed symbol");
         }
         lexeme += consumePeek(c);
-        lastToken = LIT_STR;
-        return Token{ LIT_STR, lexeme };
+        return Token(LIT_STR, lexeme);
     }
 
     // operators
@@ -448,169 +430,163 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_ADDAGN;
-            return Token{ OP_ADDAGN, lexeme };
+            return Token(OP_ADDAGN, lexeme);
         } else if (c == '+') {
             lexeme += consumePeek(c);
-            lastToken = OP_INC;
-            return Token{ OP_INC, lexeme };
+            return Token(OP_INC, lexeme);
         }
-        return Token{ OP_ADD, lexeme };
+        return Token(OP_ADD, lexeme);
     case '&':  //&  &=  &&  &^  &^=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_BITANDAGN;
-            return Token{ OP_BITANDAGN, lexeme };
+            return Token(OP_BITANDAGN, lexeme);
         } else if (c == '&') {
             lexeme += consumePeek(c);
-            lastToken = OP_AND;
-            return Token{ OP_AND, lexeme };
+            return Token(OP_AND, lexeme);
         } else if (c == '^') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
-                lastToken = OP_ANDXORAGN;
-                return Token{ OP_ANDXORAGN, lexeme };
+                return Token(OP_ANDXORAGN, lexeme);
             }
-            lastToken = OP_ANDXOR;
-            return Token{ OP_ANDXOR, lexeme };
+            return Token(OP_ANDXOR, lexeme);
         }
-        lastToken = OP_BITAND;
-        return Token{ OP_BITAND, lexeme };
+
+        return Token(OP_BITAND, lexeme);
     case '=':  //=  ==
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_EQ;
-            return Token{ OP_EQ, lexeme };
+
+            return Token(OP_EQ, lexeme);
         }
-        lastToken = OP_AGN;
-        return Token{ OP_AGN, lexeme };
+
+        return Token(OP_AGN, lexeme);
     case '!':  //!  !=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_NE;
-            return Token{ OP_NE, lexeme };
+
+            return Token(OP_NE, lexeme);
         }
-        lastToken = OP_NOT;
-        return Token{ OP_NOT, lexeme };
+
+        return Token(OP_NOT, lexeme);
     case '(':
         lexeme += consumePeek(c);
-        lastToken = OP_LPAREN;
-        return Token{ OP_LPAREN, lexeme };
+
+        return Token(OP_LPAREN, lexeme);
     case ')':
         lexeme += consumePeek(c);
-        lastToken = OP_RPAREN;
-        return Token{ OP_RPAREN, lexeme };
+
+        return Token(OP_RPAREN, lexeme);
     case '-':  //-  -= --
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_SUBAGN;
-            return Token{ OP_SUBAGN, lexeme };
+
+            return Token(OP_SUBAGN, lexeme);
         } else if (c == '-') {
             lexeme += consumePeek(c);
-            lastToken = OP_DEC;
-            return Token{ OP_DEC, lexeme };
+
+            return Token(OP_DEC, lexeme);
         }
-        lastToken = OP_SUB;
-        return Token{ OP_SUB, lexeme };
+
+        return Token(OP_SUB, lexeme);
     case '|':  //|  |=  ||
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_BITORAGN;
-            return Token{ OP_BITORAGN, lexeme };
+
+            return Token(OP_BITORAGN, lexeme);
         } else if (c == '|') {
             lexeme += consumePeek(c);
-            lastToken = OP_OR;
-            return Token{ OP_OR, lexeme };
+
+            return Token(OP_OR, lexeme);
         }
-        lastToken = OP_BITOR;
-        return Token{ OP_BITOR, lexeme };
+
+        return Token(OP_BITOR, lexeme);
     case '<':  //<  <=  <- <<  <<=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_LE;
-            return Token{ OP_LE, lexeme };
+
+            return Token(OP_LE, lexeme);
         } else if (c == '-') {
             lexeme += consumePeek(c);
-            lastToken = OP_CHAN;
-            return Token{ OP_CHAN, lexeme };
+
+            return Token(OP_CHAN, lexeme);
         } else if (c == '<') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
-                lastToken = OP_LSFTAGN;
-                return Token{ OP_LSFTAGN, lexeme };
+
+                return Token(OP_LSFTAGN, lexeme);
             }
-            lastToken = OP_LSHIFT;
-            return Token{ OP_LSHIFT, lexeme };
+
+            return Token(OP_LSHIFT, lexeme);
         }
-        lastToken = OP_LT;
-        return Token{ OP_LT, lexeme };
+
+        return Token(OP_LT, lexeme);
     case '[':
         lexeme += consumePeek(c);
-        lastToken = OP_LBRACKET;
-        return Token{ OP_LBRACKET, lexeme };
+
+        return Token(OP_LBRACKET, lexeme);
     case ']':
         lexeme += consumePeek(c);
-        lastToken = OP_RBRACKET;
-        return Token{ OP_RBRACKET, lexeme };
+
+        return Token(OP_RBRACKET, lexeme);
     case '*':  //*  *=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_MULAGN;
-            return Token{ OP_MULAGN, lexeme };
+
+            return Token(OP_MULAGN, lexeme);
         }
-        lastToken = OP_MUL;
-        return Token{ OP_MUL, lexeme };
+
+        return Token(OP_MUL, lexeme);
     case '^':  //^  ^=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_BITXORAGN;
-            return Token{ OP_BITXORAGN, lexeme };
+
+            return Token(OP_BITXORAGN, lexeme);
         }
-        lastToken = OP_XOR;
-        return Token{ OP_XOR, lexeme };
+
+        return Token(OP_XOR, lexeme);
     case '>':  //>  >=  >>  >>=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_GE;
-            return Token{ OP_GE, lexeme };
+
+            return Token(OP_GE, lexeme);
         } else if (c == '>') {
             lexeme += consumePeek(c);
             if (c == '=') {
                 lexeme += consumePeek(c);
-                lastToken = OP_RSFTAGN;
-                return Token{ OP_RSFTAGN, lexeme };
+
+                return Token(OP_RSFTAGN, lexeme);
             }
-            lastToken = OP_RSHIFT;
-            return Token{ OP_RSHIFT, lexeme };
+
+            return Token(OP_RSHIFT, lexeme);
         }
-        lastToken = OP_GT;
-        return Token{ OP_GT, lexeme };
+
+        return Token(OP_GT, lexeme);
     case '{':
         lexeme += consumePeek(c);
-        lastToken = OP_LBRACE;
-        return Token{ OP_LBRACE, lexeme };
+
+        return Token(OP_LBRACE, lexeme);
     case '}':
         lexeme += consumePeek(c);
-        lastToken = OP_RBRACE;
-        return Token{ OP_RBRACE, lexeme };
+
+        return Token(OP_RBRACE, lexeme);
     case '/': {  // /  /= // /*...*/
         char pending = consumePeek(c);
         if (c == '=') {
             lexeme += pending;
             lexeme += consumePeek(c);
-            lastToken = OP_DIVAGN;
-            return Token{ OP_DIVAGN, lexeme };
+
+            return Token(OP_DIVAGN, lexeme);
         } else if (c == '/') {
             do {
                 consumePeek(c);
@@ -630,38 +606,38 @@ skip_comment_and_find_next:
             } while (f.good());
         }
         lexeme += pending;
-        lastToken = OP_DIV;
-        return Token{ OP_DIV, lexeme };
+
+        return Token(OP_DIV, lexeme);
     }
     case ':':  // :=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_SHORTAGN;
-            return Token{ OP_SHORTAGN, lexeme };
+
+            return Token(OP_SHORTAGN, lexeme);
         }
-        lastToken = OP_COLON;
-        return Token{ OP_COLON, lexeme };
+
+        return Token(OP_COLON, lexeme);
     case ',':
         lexeme += consumePeek(c);
-        lastToken = OP_COMMA;
-        return Token{ OP_COMMA, lexeme };
+
+        return Token(OP_COMMA, lexeme);
     case ';':
         lexeme += consumePeek(c);
-        lastToken = OP_SEMI;
-        return Token{ OP_SEMI, lexeme };
+
+        return Token(OP_SEMI, lexeme);
     case '%':  //%  %=
         lexeme += consumePeek(c);
         if (c == '=') {
             lexeme += consumePeek(c);
-            lastToken = OP_MODAGN;
-            return Token{ OP_MODAGN, lexeme };
+
+            return Token(OP_MODAGN, lexeme);
         }
-        lastToken = OP_MOD;
-        return Token{ OP_MOD, lexeme };
+
+        return Token(OP_MOD, lexeme);
         // case '.' has already checked
     }
-    fprintf(stderr, "illegal token in source file");
+    REPORT_ERR("lex error", "illegal token in source file");
 }
 
 const AstNode* parse(const string & filename) {
@@ -1518,11 +1494,9 @@ const AstNode* parse(const string & filename) {
                 }
                 else if (t.type == OP_LBRACE) {
                     // only operand has literal value, otherwise, treats it as a block
-                    if (typeid(*tmp) == typeid(AstArrayType) || typeid(*tmp) == typeid(AstSliceType) ||
-                        typeid(*tmp) == typeid(AstStructType) || typeid(*tmp) == typeid(AstMapType) ||
-                        ((typeid(*tmp) == typeid(AstName) || typeid(*tmp) == typeid(AstSelectorExpr)) && nestLev >= 0)) {
-                        // it's somewhat curious since official implementation treats literal type
-                        // and literal value as separate parts
+                    if (anyone(typeid(*tmp), typeid(AstArrayType), typeid(AstSliceType), typeid(AstStructType), typeid(AstMapType))
+                        || ((anyone(typeid(*tmp), typeid(AstName), typeid(AstSelectorExpr))) && nestLev >= 0)) {
+                        // it's somewhat curious since official implementation treats literal type and literal value as separate parts
                         auto* e = new AstCompositeLit;
                         e->litName = tmp;
                         e->litValue = parseLitValue(t);
@@ -1595,9 +1569,9 @@ void emitStub() {}
 
 void runtimeStub() {}
 
-//===----------------------------------------------------------------------===//
+//===---------------------------------------------------------------------------------------===//
 // debug auxiliary functions, they are not part of 5 functions
-//===----------------------------------------------------------------------===//
+//===---------------------------------------------------------------------------------------===//
 void printLex(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
     while (lastToken != TK_EOF) {
@@ -1611,7 +1585,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "specify your go source file\n");
         return 1;
     }
-    printLex(argv[1]);
+    //printLex(argv[1]);
     const AstNode* ast = parse(argv[1]);
     fprintf(stdout, "parsing passed\n");
     return 0;
