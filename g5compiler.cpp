@@ -19,9 +19,10 @@
 #include <vector>
 #include <tuple>
 #include <map>
+#include <optional>
 #define LAMBDA_FUN(X) function<Ast##X*(Token&)> parse##X;
 #define REPORT_ERR(PRE,STR) \
-fprintf(stderr,PRE##": "##STR##" at line %d, col %d\n",line,column);\
+fprintf(stderr,"%s:%s at line %d, col %d\n",#PRE,#STR,line,column);\
 exit(EXIT_FAILURE);
 #define _ND :public AstNode
 using namespace std;
@@ -251,7 +252,6 @@ Token next(fstream& f) {
         return oc;
     };
     auto c = static_cast<char>(f.peek());
-
 skip_comment_and_find_next:
     for (; anyone(c, ' ', '\r', '\t', '\n'); column++) {
         if (c == '\n') {
@@ -388,7 +388,7 @@ skip_comment_and_find_next:
                 lexeme += consumePeek(c);
             else { REPORT_ERR("lex error", "illegal rune"); }
         } else lexeme += consumePeek(c);
-        
+
         if (c != '\'') {
             REPORT_ERR("lex error", "illegal rune at least in current implementation of g8");
         }
@@ -424,163 +424,36 @@ skip_comment_and_find_next:
         return Token(LIT_STR, lexeme);
     }
 
+    auto match = [&](
+        initializer_list<
+        tuple<
+        pair<char, TokenType>,
+        initializer_list<pair<string_view, TokenType>>,
+        pair<string_view, TokenType>>> big) ->Token {
+        for (const auto&[v1, v2, v3] : big) {
+            if (c == v1.first) {
+                lexeme += consumePeek(c);
+                for (const auto &[v2str, v2type] : v2) {
+                    if (c == v2str[1]) {
+                        lexeme += consumePeek(c);
+                        if (const auto&[v3str, v3type] = v3; v3type != INVALID) {
+                            if (c == v3str[2]) {
+                                lexeme += consumePeek(c);
+                                return Token(v3type, lexeme);
+                            }
+                        }
+                        return Token(v2type, lexeme);
+                    }
+                }
+                return Token(v1.second, lexeme);
+            }
+        }
+
+        return Token(INVALID, "");
+    };
+
     // operators
-    switch (c) {
-    case '+':  //+  += ++
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
-            return Token(OP_ADDAGN, lexeme);
-        } else if (c == '+') {
-            lexeme += consumePeek(c);
-            return Token(OP_INC, lexeme);
-        }
-        return Token(OP_ADD, lexeme);
-    case '&':  //&  &=  &&  &^  &^=
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
-            return Token(OP_BITANDAGN, lexeme);
-        } else if (c == '&') {
-            lexeme += consumePeek(c);
-            return Token(OP_AND, lexeme);
-        } else if (c == '^') {
-            lexeme += consumePeek(c);
-            if (c == '=') {
-                lexeme += consumePeek(c);
-                return Token(OP_ANDXORAGN, lexeme);
-            }
-            return Token(OP_ANDXOR, lexeme);
-        }
-
-        return Token(OP_BITAND, lexeme);
-    case '=':  //=  ==
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_EQ, lexeme);
-        }
-
-        return Token(OP_AGN, lexeme);
-    case '!':  //!  !=
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_NE, lexeme);
-        }
-
-        return Token(OP_NOT, lexeme);
-    case '(':
-        lexeme += consumePeek(c);
-
-        return Token(OP_LPAREN, lexeme);
-    case ')':
-        lexeme += consumePeek(c);
-
-        return Token(OP_RPAREN, lexeme);
-    case '-':  //-  -= --
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_SUBAGN, lexeme);
-        } else if (c == '-') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_DEC, lexeme);
-        }
-
-        return Token(OP_SUB, lexeme);
-    case '|':  //|  |=  ||
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_BITORAGN, lexeme);
-        } else if (c == '|') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_OR, lexeme);
-        }
-
-        return Token(OP_BITOR, lexeme);
-    case '<':  //<  <=  <- <<  <<=
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_LE, lexeme);
-        } else if (c == '-') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_CHAN, lexeme);
-        } else if (c == '<') {
-            lexeme += consumePeek(c);
-            if (c == '=') {
-                lexeme += consumePeek(c);
-
-                return Token(OP_LSFTAGN, lexeme);
-            }
-
-            return Token(OP_LSHIFT, lexeme);
-        }
-
-        return Token(OP_LT, lexeme);
-    case '[':
-        lexeme += consumePeek(c);
-
-        return Token(OP_LBRACKET, lexeme);
-    case ']':
-        lexeme += consumePeek(c);
-
-        return Token(OP_RBRACKET, lexeme);
-    case '*':  //*  *=
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_MULAGN, lexeme);
-        }
-
-        return Token(OP_MUL, lexeme);
-    case '^':  //^  ^=
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_BITXORAGN, lexeme);
-        }
-
-        return Token(OP_XOR, lexeme);
-    case '>':  //>  >=  >>  >>=
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_GE, lexeme);
-        } else if (c == '>') {
-            lexeme += consumePeek(c);
-            if (c == '=') {
-                lexeme += consumePeek(c);
-
-                return Token(OP_RSFTAGN, lexeme);
-            }
-
-            return Token(OP_RSHIFT, lexeme);
-        }
-
-        return Token(OP_GT, lexeme);
-    case '{':
-        lexeme += consumePeek(c);
-
-        return Token(OP_LBRACE, lexeme);
-    case '}':
-        lexeme += consumePeek(c);
-
-        return Token(OP_RBRACE, lexeme);
-    case '/': {  // /  /= // /*...*/
+    if(c=='/') { // special case for /  /= // /*...*/
         char pending = consumePeek(c);
         if (c == '=') {
             lexeme += pending;
@@ -606,38 +479,33 @@ skip_comment_and_find_next:
             } while (f.good());
         }
         lexeme += pending;
-
         return Token(OP_DIV, lexeme);
     }
-    case ':':  // :=
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
+    auto result = match({
+        {{ '+',OP_ADD },    {{"+=",OP_ADDAGN} ,{"++",OP_INC}},                      {}},
+        {{'&',OP_BITAND},   {{"&=",OP_BITANDAGN},{"&&",OP_AND},{"&^",OP_ANDXOR}},   {"&^=",OP_ANDXORAGN}},
+        {{'=',OP_AGN},      {{"==",OP_EQ}},                                         {}},
+        {{'!',OP_NOT},      {{"!=",OP_NE}},                                         {}},
+        {{'(',OP_LPAREN},   {},                                                     {}},
+        {{')',OP_RPAREN},   {},                                                     {}},
+        {{'-',OP_SUB},      {{"-=",OP_SUBAGN},{"--",OP_DEC}},                       {}},
+        {{'|',OP_BITOR},    {{"|=",OP_BITORAGN},{"||",OP_OR}},                      {}},
+        {{'<',OP_LT},       {{"<=",OP_LE},{"<-",OP_CHAN},{"<<",OP_LSHIFT}},         {"<<=",OP_LSFTAGN}},
+        {{'[',OP_LBRACKET}, {},                                                     {}},
+        {{']',OP_RBRACKET}, {},                                                     {}},
+        {{'*',OP_MUL},      {{"*=",OP_MULAGN}},                                     {}},
+        {{'^',OP_XOR},      {{"^=",OP_BITXORAGN}},                                  {}},
+        {{'>',OP_GT},       {{">=",OP_GE},{">>",OP_RSHIFT}},                        {">>=",OP_RSFTAGN}},
+        {{'{',OP_LBRACE},   {},                                                     {}},
+        {{'}',OP_RBRACE},   {},                                                     {}},
+        {{':',OP_COLON},    {{":=",OP_SHORTAGN}},                                   {}},
+        {{',',OP_COMMA},    {},                                                     {}},
+        {{';',OP_SEMI},     {},                                                     {}},
+        {{'%',OP_MOD},      {{"%=",OP_MODAGN}},                                     {}},
+    });
 
-            return Token(OP_SHORTAGN, lexeme);
-        }
-
-        return Token(OP_COLON, lexeme);
-    case ',':
-        lexeme += consumePeek(c);
-
-        return Token(OP_COMMA, lexeme);
-    case ';':
-        lexeme += consumePeek(c);
-
-        return Token(OP_SEMI, lexeme);
-    case '%':  //%  %=
-        lexeme += consumePeek(c);
-        if (c == '=') {
-            lexeme += consumePeek(c);
-
-            return Token(OP_MODAGN, lexeme);
-        }
-
-        return Token(OP_MOD, lexeme);
-        // case '.' has already checked
-    }
-    REPORT_ERR("lex error", "illegal token in source file");
+    if (result.type != INVALID) { return result; }
+    else { REPORT_ERR("lex error", "illegal token in source file"); }
 }
 
 const AstNode* parse(const string & filename) {
