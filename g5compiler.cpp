@@ -36,26 +36,22 @@ string keywords[] = { "break",    "default",     "func",   "interface", "select"
                      "const",    "fallthrough", "if",     "range",     "type",
                      "continue", "for",         "import", "return",    "var" };
 static int line = 1, column = 1, lastToken = 0, shouldEof = 0, nestLev = 0;
-static struct goruntime {
-    string package;
-} grt;
+static struct goruntime {} grt;
 auto anyone = [](auto&& k, auto&&... args) ->bool { return ((args == k) || ...); };
 //===---------------------------------------------------------------------------------------===//
 // various declarations 
 //===---------------------------------------------------------------------------------------===//
 #pragma region GlobalDecl
 enum TokenType : signed int {
-    INVALID = 0, KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case,
-    KW_defer, KW_go, KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package,
-    KW_switch, KW_const, KW_fallthrough, KW_if, KW_range, KW_type, KW_continue,
-    KW_for, KW_import, KW_return, KW_var, OP_ADD, OP_BITAND, OP_ADDAGN, OP_SHORTAGN, 
-    OP_AND, OP_EQ, OP_NE, OP_LPAREN, OP_RPAREN, OP_SUB, OP_BITOR, OP_SUBAGN,
-    OP_BITORAGN, OP_OR, OP_LT, OP_LE, OP_LBRACKET, OP_RBRACKET, OP_MUL, OP_XOR,
-    OP_MULAGN, OP_BITXORAGN, OP_CHAN, OP_GT, OP_GE, OP_LBRACE, OP_RBRACE,
-    OP_DIV, OP_LSHIFT, OP_DIVAGN, OP_LSFTAGN, OP_INC, OP_AGN, OP_BITANDAGN,
-    OP_COMMA, OP_SEMI, OP_MOD, OP_RSHIFT, OP_MODAGN, OP_RSFTAGN, OP_DEC,
-    OP_NOT, OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORAGN, TK_ID,
-    LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR, TK_EOF = -1,
+    INVALID = 0, KW_break, KW_default, KW_func, KW_interface, KW_select, KW_case, KW_defer, KW_go, 
+    KW_map, KW_struct, KW_chan, KW_else, KW_goto, KW_package, KW_switch, KW_const, KW_fallthrough, 
+    KW_if, KW_range, KW_type, KW_continue, KW_for, KW_import, KW_return, KW_var, OP_ADD, OP_BITAND,
+    OP_ADDAGN, OP_SHORTAGN, OP_AND, OP_EQ, OP_NE, OP_LPAREN, OP_RPAREN, OP_SUB, OP_BITOR, OP_SUBAGN,
+    OP_BITORAGN, OP_OR, OP_LT, OP_LE, OP_LBRACKET, OP_RBRACKET, OP_MUL, OP_XOR, OP_MULAGN, OP_BITXORAGN,
+    OP_CHAN, OP_GT, OP_GE, OP_LBRACE, OP_RBRACE, OP_DIV, OP_LSHIFT, OP_DIVAGN, OP_LSFTAGN, OP_INC, 
+    OP_AGN, OP_BITANDAGN, OP_COMMA, OP_SEMI, OP_MOD, OP_RSHIFT, OP_MODAGN, OP_RSFTAGN, OP_DEC, OP_NOT,
+    OP_VARIADIC, OP_DOT, OP_COLON, OP_ANDXOR, OP_ANDXORAGN, TK_ID, LIT_INT, LIT_FLOAT, LIT_IMG, 
+    LIT_RUNE, LIT_STR, TK_EOF = -1,
 };
 //todo: add destructor for these structures
 // Common
@@ -86,7 +82,8 @@ struct AstFuncDecl _ND {
     AstNode* signature{};
     AstStmtList* funcBody{};
 };
-struct AstSourceFile _ND {
+struct AstCompilationUnit _ND {
+    string package;
     vector<AstImportDecl*> importDecl;
     vector<AstConstDecl*> constDecl;
     vector<AstTypeDecl*> typeDecl;
@@ -107,7 +104,8 @@ struct AstStructType _ND {
 struct AstPtrType _ND { AstNode* baseType{}; };
 struct AstSignature _ND {
     AstNode* param{};
-    AstNode* result{};
+    AstNode* resultParam{};
+    AstNode* resultType{};
 };
 struct AstFuncType _ND { AstSignature * signature{}; };
 struct AstParam _ND { vector<AstNode*> paramList; };
@@ -116,10 +114,6 @@ struct AstParamDecl _ND {
     bool hasName = false;
     AstNode* type{};
     string name;
-};
-struct AstResult _ND {
-    AstNode* param;
-    AstNode* type;
 };
 struct AstInterfaceType _ND { vector<tuple<AstName*,AstSignature*>> method; };
 struct AstSliceType _ND { AstNode* elemType{}; };
@@ -241,7 +235,7 @@ struct Token {
 };
 #pragma endregion
 //===---------------------------------------------------------------------------------------===//
-// Implementation of golang compiler and runtime within 5 functions
+// Implementation of golang compiler and runtime within 5 explicit functions
 //===---------------------------------------------------------------------------------------===//
 Token next(fstream& f) {
     auto consumePeek = [&](char& c) {
@@ -524,9 +518,8 @@ const AstNode* parse(const string & filename) {
     LAMBDA_FUN(SelectCase); LAMBDA_FUN(SwitchCase);
     function<AstFuncDecl*(bool, Token&)> parseFuncDecl;
     function<AstNode*(AstExprList *, Token&)> parseSimpleStmt;
-    function<AstStmtList*(Token&)> parseBlock;
     function<AstNode*(Token&)> parseTypeAssertion, parseType, parseArrayOrSliceType, parseStructType, parsePtrType,
-        parseFuncType, parseParam, parseParamDecl, parseResult, parseInterfaceType, parseMapType, parseChanType,
+        parseFuncType, parseParam, parseParamDecl, parseInterfaceType, parseMapType, parseChanType,
         parseVarSpec, parseStmt, parseIfStmt, parseSelectStmt, parseForStmt, parseOperand, parseKey;
 
 #pragma region Common
@@ -584,27 +577,21 @@ const AstNode* parse(const string & filename) {
         }
         return node;
     };
-#pragma endregion
-#pragma region Declaration
-    auto parseSourceFile = [&](Token&t)->AstNode* {
-        AstSourceFile * node = new AstSourceFile;
-        eat(KW_package, "a go source file must start with package declaration");
-        grt.package = t.lexeme;
-        eat(TK_ID, "name required at the package declaration");
-        eat(OP_SEMI, "expect ; at the end of package declaration");
-        while (t.type != TK_EOF) {
-            switch (t.type) {
-            case KW_import: node->importDecl.push_back(parseImportDecl(t)); break;
-            case KW_const:  node->constDecl.push_back(parseConstDecl(t)); break;
-            case KW_type:   node->typeDecl.push_back(parseTypeDecl(t)); break;
-            case KW_var:    node->varDecl.push_back(parseVarDecl(t)); break;
-            case KW_func:   node->funcDecl.push_back(parseFuncDecl(false, t)); break;
-            case OP_SEMI:   t = next(f); break;
-            default:        throw runtime_error("unknown top level declaration");
+    auto parseBlock = [&](Token&t)->AstStmtList* {
+        AstStmtList * node{};
+        if (t.type == OP_LBRACE) {
+            t = next(f);
+            if (t.type != OP_RBRACE) {
+                node = parseStmtList(t);
+                eat(OP_RBRACE, "expect } around code block");
+            } else {
+                t = next(f);
             }
         }
         return node;
     };
+#pragma endregion
+#pragma region Declaration
     parseImportDecl = [&](Token&t)->AstImportDecl* {
         auto node = new AstImportDecl;
         eat(KW_import, "it should be import declaration");
@@ -780,7 +767,11 @@ const AstNode* parse(const string & filename) {
         if (t.type == OP_LPAREN) {
             node = new AstSignature;
             node->param = parseParam(t);
-            node->result = parseResult(t);
+            if (auto*result = parseParam(t); result != nullptr) {
+                node->resultParam = result;
+            } else  if (auto*result = parseType(t); result != nullptr) {
+                node->resultType = result;
+            } 
         }
         return node;
     };
@@ -837,18 +828,6 @@ const AstNode* parse(const string & filename) {
             else {
                 node->type = mayIdentOrType;
             }
-        }
-        return node;
-    };
-    parseResult = [&](Token&t)->AstNode* {
-        AstResult* node{};
-        if (auto*tmp = parseParam(t); tmp != nullptr) {
-            node = new AstResult;
-            node->param = tmp;
-        }
-        else  if (auto*tmp = parseType(t); tmp != nullptr) {
-            node = new AstResult;
-            node->type = tmp;
         }
         return node;
     };
@@ -988,14 +967,12 @@ const AstNode* parse(const string & filename) {
         case KW_continue:   {t = next(f);  return new AstContinueStmt(t.type == TK_ID ? t.lexeme : "");  }
         case KW_goto:       {t = next(f);  return new AstGotoStmt(t.lexeme);  }
         case KW_defer:      {t = next(f);  return new AstDeferStmt(parseExpr(t));  }
-
         case KW_if:         return parseIfStmt(t);
         case KW_switch:     return parseSwitchStmt(t);
         case KW_select:     return parseSelectStmt(t);
         case KW_for:        return parseForStmt(t);
         case OP_LBRACE:     return parseBlock(t);
         case OP_SEMI:       return nullptr;
-
         case OP_ADD:case OP_SUB:case OP_NOT:case OP_XOR:case OP_MUL:case OP_CHAN:
         case LIT_STR:case LIT_INT:case LIT_IMG:case LIT_FLOAT:case LIT_RUNE:
         case KW_func:case KW_struct:case KW_map:case OP_LBRACKET:case TK_ID: case OP_LPAREN:
@@ -1098,20 +1075,6 @@ const AstNode* parse(const string & filename) {
             return stmt;
         }
         }
-    };
-    parseBlock = [&](Token&t)->AstStmtList* {
-        AstStmtList * node{};
-        if (t.type == OP_LBRACE) {
-            t = next(f);
-            if (t.type != OP_RBRACE) {
-                node = parseStmtList(t);
-                eat(OP_RBRACE, "expect } around code block");
-            }
-            else {
-                t = next(f);
-            }
-        }
-        return node;
     };
     parseIfStmt = [&](Token&t)->AstIfStmt* {
         const int outLev = nestLev;
@@ -1430,7 +1393,23 @@ const AstNode* parse(const string & filename) {
     };
 #pragma endregion
     // parsing startup
-    return parseSourceFile(t);
+    auto * node = new AstCompilationUnit;
+    eat(KW_package, "a go source file must start with package declaration");
+    node->package = t.lexeme;
+    eat(TK_ID, "name required at the package declaration");
+    eat(OP_SEMI, "expect ; at the end of package declaration");
+    while (t.type != TK_EOF) {
+        switch (t.type) {
+        case KW_import: node->importDecl.push_back(parseImportDecl(t));     break;
+        case KW_const:  node->constDecl.push_back(parseConstDecl(t));       break;
+        case KW_type:   node->typeDecl.push_back(parseTypeDecl(t));         break;
+        case KW_var:    node->varDecl.push_back(parseVarDecl(t));           break;
+        case KW_func:   node->funcDecl.push_back(parseFuncDecl(false, t));  break;
+        case OP_SEMI:   t = next(f); break;
+        default:        {REPORT_ERR("syntax error","unknown top level declaration"); }
+        }
+    }
+    return node;
 }
 
 void emitStub() {}
