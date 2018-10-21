@@ -78,40 +78,14 @@ struct AstContinueStmt _S { string label; AstContinueStmt(const string&s) :label
 struct AstGotoStmt _S { string label; AstGotoStmt(const string&s) :label(s) {} };
 struct AstFallthroughStmt _S {};
 struct AstLabeledStmt _S { string label; AstNode* stmt{}; };
-struct AstIfStmt _S {
-    AstNode* init{};
-    AstExpr* cond{};
-    AstStmt* ifBlock{}, *elseBlock{};
-};
-struct AstSwitchCase{
-    AstNode* exprList{};
-    AstNode* stmtList{};
-};
-struct AstSwitchStmt _S {
-    AstNode* init{};
-    AstNode* cond{};
-    vector<AstSwitchCase*> caseList{};
-};
-struct AstSelectCase {
-    AstNode* cond{};
-    AstStmtList* stmtList{};
-};
-struct AstSelectStmt _S {
-    vector<AstSelectCase*> caseList;
-};
-struct AstForStmt _S {
-    AstNode* init{}, *cond{}, *post{};
-    AstBlockStmt* block{};
-};
-struct AstSRangeClause _S{
-    vector<string> lhs;
-    AstExpr* rhs{};
-};
-struct AstRangeClause _S {
-    AstExprList* lhs{};
-    TokenType op;
-    AstExpr* rhs{};
-};
+struct AstIfStmt _S { AstStmt* init{}, *ifBlock{}, *elseBlock{}; AstExpr* cond{}; };
+struct AstSwitchCase { AstExprList* exprList{}; AstStmtList* stmtList{}; };
+struct AstSwitchStmt _S { AstStmt* init{}, *cond{}; vector<AstSwitchCase*> caseList{}; };
+struct AstSelectCase {AstStmtList* stmtList{};};
+struct AstSelectStmt _S {vector<AstSelectCase*> caseList;};
+struct AstForStmt _S { AstNode* init{}, *cond{}, *post{}; AstBlockStmt* block{}; };
+struct AstSRangeClause _S{vector<string> lhs;AstExpr* rhs{};};
+struct AstRangeClause _S { AstExprList* lhs{}; TokenType op; AstExpr* rhs{}; };
 struct AstExprStmt _S { AstExpr* expr{}; };
 struct AstSendStmt _S { AstExpr* receiver{}, *sender{}; };
 struct AstIncDecStmt _S { AstExpr* expr{}; bool isInc{}; };
@@ -148,12 +122,7 @@ struct AstTypeSpec { string ident; AstNode* type; };
 struct AstTypeDecl _S { vector<AstTypeSpec*> typeSpec; };
 struct AstVarSpec { AstIdentList* identList{}; AstExprList* exprList{}; AstExpr* type{}; };
 struct AstVarDecl _S { vector<AstVarSpec*> varSpec; };
-struct AstFuncDecl {
-    string funcName;
-    AstParam* receiver{};
-    AstSignature* signature{};
-    AstBlockStmt* funcBody{};
-};
+struct AstFuncDecl {string funcName;AstParam* receiver{};AstSignature* signature{};AstBlockStmt* funcBody{};};
 struct AstCompilationUnit {
     string package;
     vector<AstImportDecl*> importDecl;
