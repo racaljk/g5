@@ -625,7 +625,7 @@ const auto parse(const string & filename) {
             for (int i = 0, rewriteStart = 0; i < node->paramList.size(); i++) {
                 if (dynamic_cast<ParamDecl*>(node->paramList[i])->hasName) {
                     for (int k = rewriteStart; k < i; k++) {
-                        string name = node->paramList[k]->name;
+                        string name = dynamic_cast<Name*>(node->paramList[k]->type)->name;
                         node->paramList[k]->type = node->paramList[i]->type;
                         node->paramList[k]->name = name;
                         node->paramList[k]->hasName = true; //It's not necessary
@@ -653,9 +653,7 @@ const auto parse(const string & filename) {
         auto * node = new FuncDecl;
         eat(KW_func, "it should be function declaration");
         if (!anonymous) {
-            if (t.type == OP_LPAREN) {
-                node->receiver = parseParam(t);
-            }
+            if (t.type == OP_LPAREN) node->receiver = parseParam(t);
             node->funcName = t.lexeme;
             t = next(f);
         }
@@ -708,9 +706,7 @@ const auto parse(const string & filename) {
                 }
                 get<0>(field) = parseName(true, t);
             }
-            if (t.type == LIT_STR) {
-                get<2>(field) = t.lexeme;
-            }
+            if (t.type == LIT_STR) get<2>(field) = t.lexeme;  
             node->fields.push_back(field);
             eatOptionalSemi();
         } while (t.type != OP_RBRACE);
@@ -723,12 +719,10 @@ const auto parse(const string & filename) {
         eat(KW_interface, "interface type requires keyword interface");
         eat(OP_LBRACE, "{ is required after interface");
         while (t.type != OP_RBRACE) {
-            if (auto* tmp = parseName(true, t); tmp != nullptr && tmp->name.find('.') == string::npos) {
+            if (auto* tmp = parseName(true, t); tmp != nullptr && tmp->name.find('.') == string::npos)
                 node->method.emplace_back(tmp, parseSignature(t));
-            }
-            else {
-                node->method.emplace_back(tmp, nullptr);
-            }
+            else node->method.emplace_back(tmp, nullptr);
+            
             eatOptionalSemi();
         }
         t = next(f);
@@ -751,17 +745,14 @@ const auto parse(const string & filename) {
             if (t.type == OP_CHAN) {
                 t = next(f);
                 node->elem = parseType(t);
-            }
-            else {
+            } else {
                 node->elem = parseType(t);
             }
         }
         else if (t.type == OP_CHAN) {
             node = new ChanType;
             t = next(f);
-            if (t.type == KW_chan) {
-                node->elem = parseType(t);
-            }
+            if (t.type == KW_chan) node->elem = parseType(t);
         }
         return node;
     };
