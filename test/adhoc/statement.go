@@ -7,6 +7,34 @@ import (
 	"strconv"
 	"strings"
 )
+func newBucket(typ bucketType, nstk int) *bucket {
+	size := unsafe.Sizeof(bucket{}) + uintptr(nstk)*unsafe.Sizeof(uintptr(0))
+	switch typ {
+	default:
+		throw("invalid profile bucket type")
+	case memProfile:
+		size += unsafe.Sizeof(memRecord{})
+	case blockProfile, mutexProfile:
+		size += unsafe.Sizeof(blockRecord{})
+	}
+
+	b := (*bucket)(persistentalloc(size, 0, &memstats.buckhash_sys))
+	bucketmem += size
+	b.typ = typ
+	b.nstk = uintptr(nstk)
+	return b
+}
+func TestChanSendInterface(t *testing.T) {
+    size := unsafe.Sizeof(bucket{}) + uintptr(nstk)*unsafe.Sizeof(uintptr(0))
+	select {
+	case c <- &mt{}:
+	default:
+	}
+    select {
+	case c <- m:
+	default:
+	}
+}
 func (d *digest) Write(p []byte) (nn int, err error) {
 	nn = len(p)
 	d.len += uint64(nn)

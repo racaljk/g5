@@ -1,4 +1,31 @@
 package main
+
+var tests = []struct {
+		val    interface{} // type as a value
+		_32bit uintptr     // size on 32bit platforms
+		_64bit uintptr     // size on 64bit platforms
+	}{
+		{runtime.G{}, 216, 376}, // g, but exported for testing
+	}
+
+var (
+	mbuckets  *bucket // memory profile buckets
+	bbuckets  *bucket // blocking profile buckets
+	xbuckets  *bucket // mutex profile buckets
+	buckhash  *[179999]*bucket
+	bucketmem uintptr
+
+	mProf struct {
+		// All fields in mProf are protected by proflock.
+
+		// cycle is the global heap profile cycle. This wraps
+		// at mProfCycleWrap.
+		cycle uint32
+		// flushed indicates that future[cycle] in all buckets
+		// has been flushed to the active profile.
+		flushed bool
+	}
+)
 var blockJump = [...]struct {
 	asm, invasm obj.As
 }{

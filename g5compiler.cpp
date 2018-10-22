@@ -5,35 +5,28 @@
 // This program is free software: you can redistribute it and/or modify it under the terms of the 
 // GNU General Public License as published by the Free Software Foundation, either version 3 of 
 // the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
-// even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU 
-// General Public License for more details. You should have received a copy of the GNU General 
-// Public License along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //===---------------------------------------------------------------------------------------===//
-#include <cstdio>
 #include <exception>
+#include <iostream>
 #include <fstream>
 #include <functional>
 #include <string>
 #include <vector>
 #include <tuple>
 #include <map>
-#include <optional>
 #define inrange(c,begin,end) (c>=begin && c<=end)
 #define LAMBDA_FUN(X) function<X*(Token&)> parse##X;
-#define REPORT_ERR(PRE,STR) \
-{fprintf(stderr,"%s:%s at line %d, col %d\n",#PRE,#STR,line,column);\
+#define G_ERROR(PRE,STR) \
+{cerr<<PRE<<": "<<STR<<" at line "<<line<<", col"<<column<<"\n";\
 exit(EXIT_FAILURE);}
+#define G_ASSERT(EXPR,PRE,MSG) {if((EXPR)) G_ERROR(PRE,MSG);}
 using namespace std;
 //===---------------------------------------------------------------------------------------===//
 // global data
 //===---------------------------------------------------------------------------------------===//
-string keywords[] = { "break",    "default",     "func",   "interface", "select",
-                     "case",     "defer",       "go",     "map",       "struct",
-                     "chan",     "else",        "goto",   "package",   "switch",
-                     "const",    "fallthrough", "if",     "range",     "type",
-                     "continue", "for",         "import", "return",    "var" };
+string keywords[] = { "break","default","func","interface","select","case","defer","go","map",
+    "struct","chan","else","goto","package","switch","const","fallthrough","if","range","type",
+    "continue","for","import","return","var" };
 static int line = 1, column = 1, lastToken = 0, shouldEof = 0, nestLev = 0;
 static struct goruntime {} grt;
 static auto anyone = [](auto&& k, auto&&... args) ->bool { return ((args == k) || ...); };
@@ -57,6 +50,10 @@ enum TokenType : signed int {
 #define _S :public Stmt
 #define _E :public Expr
 #define _N :public Node
+#define CTOR1(NAME,FD1)         NAME(decltype(FD1) FD1):FD1(FD1){}
+#define CTOR2(NAME,FD1,FD2)     NAME(decltype(FD1) FD1, decltype(FD2) FD2):FD1(FD1),FD2(FD2){}
+#define CTOR3(NAME,FD1,FD2,FD3) NAME(decltype(FD1) FD1, decltype(FD2) FD2, decltype(FD3) FD3)\
+                                :FD1(FD1),FD2(FD2),FD3(FD3){}
 struct UnaryExpr;
 struct Node                { virtual ~Node() = default; };
 struct Expr             _N { UnaryExpr* lhs{}; TokenType op{}; Expr* rhs{}; };
@@ -68,46 +65,46 @@ struct ExprList         _E { vector<Expr*> exprList; };
 struct StmtList         _E { vector<Stmt*> stmtList; };
 // Statement
 struct BlockStmt        _S { StmtList* stmtList{}; };
-struct GoStmt           _S { Expr* expr{}; GoStmt(Expr* expr) :expr(expr) {} };
-struct ReturnStmt       _S { ExprList* exprList{}; ReturnStmt(ExprList* el) :exprList(el) {} };
-struct BreakStmt        _S { string label; BreakStmt(const string&s) :label(s) {} };
-struct DeferStmt        _S { Expr* expr{}; DeferStmt(Expr* expr) :expr(expr) {} };
-struct ContinueStmt     _S { string label; ContinueStmt(const string&s) :label(s) {} };
-struct GotoStmt         _S { string label; GotoStmt(const string&s) :label(s) {} };
+struct GoStmt           _S { Expr* expr{}; CTOR1(GoStmt, expr) };
+struct ReturnStmt       _S { ExprList* exprList{}; CTOR1(ReturnStmt,exprList) };
+struct BreakStmt        _S { string label; CTOR1(BreakStmt, label) };
+struct DeferStmt        _S { Expr* expr{}; CTOR1(DeferStmt, expr) };
+struct ContinueStmt     _S { string label; CTOR1(ContinueStmt, label) };
+struct GotoStmt         _S { string label; CTOR1(GotoStmt, label) };
 struct FallthroughStmt  _S {};
-struct LabeledStmt      _S { string label; Stmt* stmt{}; LabeledStmt(const string&s, Stmt*st) :label(s), stmt(st) {} };
+struct LabeledStmt      _S { string label; Stmt* stmt{}; CTOR2(LabeledStmt,label,stmt)};
 struct IfStmt           _S { Stmt* init{}, *ifBlock{}, *elseBlock{}; Expr* cond{}; };
 struct SwitchCase          { ExprList* exprList{}; StmtList* stmtList{}; };
 struct SwitchStmt       _S { Stmt* init{}, *cond{}; vector<SwitchCase*> caseList{}; };
 struct SelectCase          {StmtList* stmtList{};};
 struct SelectStmt       _S {vector<SelectCase*> caseList;};
 struct ForStmt          _S { Node* init{}, *cond{}, *post{}; BlockStmt* block{}; };
-struct SRangeClause     _S {vector<string> lhs;Expr* rhs{};};
-struct RangeClause      _S { ExprList* lhs{}; TokenType op; Expr* rhs{}; };
-struct ExprStmt         _S { Expr* expr{}; };
-struct SendStmt         _S { Expr* receiver{}, *sender{}; };
-struct IncDecStmt       _S { Expr* expr{}; bool isInc{}; };
-struct AssignStmt       _S { ExprList* lhs{}, *rhs{}; TokenType op{}; };
-struct SAssignStmt      _S { vector<string> lhs{}; ExprList* rhs{}; };
+struct SRangeClause     _S { vector<string> lhs; Expr* rhs{}; CTOR2(SRangeClause, lhs, rhs) };
+struct RangeClause      _S { ExprList* lhs{}; TokenType op; Expr* rhs{}; CTOR3(RangeClause,lhs,op,rhs)};
+struct ExprStmt         _S { Expr* expr{}; CTOR1(ExprStmt,expr) };
+struct SendStmt         _S { Expr* receiver{}, *sender{}; CTOR2(SendStmt, receiver, sender) };
+struct IncDecStmt       _S { Expr* expr{}; bool isInc{}; CTOR2(IncDecStmt, expr, isInc) };
+struct AssignStmt       _S { ExprList* lhs{}, *rhs{}; TokenType op{}; CTOR3(AssignStmt,lhs,op,rhs) };
+struct SAssignStmt      _S { vector<string> lhs{}; ExprList* rhs{}; CTOR2(SAssignStmt,lhs,rhs) };
 // Expression
-struct SelectorExpr     _E { Expr* operand{}; string selector; SelectorExpr(Expr*e, string s):operand(e),selector(s) {} };
-struct TypeSwitchExpr   _E { Expr* operand{}; TypeSwitchExpr(Expr*e) :operand(e) {} };
-struct TypeAssertExpr   _E { Expr* operand{}, *type{}; TypeAssertExpr(Expr*e, Expr *t) :operand(e), type(t) {} };
-struct IndexExpr        _E { Expr* operand{}, *index{}; IndexExpr(Expr*e, Expr*i) :operand(e), index(i) {} };
+struct SelectorExpr     _E { Expr* operand{}; string selector; CTOR2(SelectorExpr, operand, selector) };
+struct TypeSwitchExpr   _E { Expr* operand{}; CTOR1(TypeSwitchExpr,operand) };
+struct TypeAssertExpr   _E { Expr* operand{}, *type{}; CTOR2(TypeAssertExpr,operand,type) };
+struct IndexExpr        _E { Expr* operand{}, *index{}; CTOR2(IndexExpr, operand, index) };
 struct SliceExpr        _E { Expr* operand{}, *begin{}, *end{}, *step{}; };
 struct CallExpr         _E { Expr* operand{}, *type{}; ExprList* arguments{}; bool isVariadic{}; };
 struct KeyedElement        { Expr*key{}, *elem{}; };
 struct LitValue         _E { vector<KeyedElement*> keyedElement; };
-struct BasicLit         _E { TokenType type{}; string value; BasicLit(TokenType t, const string&s) :type(t), value(s) {} };
-struct CompositeLit     _E { Expr* litName{}; LitValue* litValue{}; };
+struct BasicLit         _E { TokenType type{}; string value; CTOR2(BasicLit, type, value) };
+struct CompositeLit     _E { Expr* litName{}; LitValue* litValue{}; CTOR2(CompositeLit,litName,litValue) };
 struct Name             _E { string name; };
 struct ArrayType        _E { Expr* len{}; Expr* elem{}; bool autoLen = false; };
 struct StructType       _E { vector<tuple<Expr*, Expr*, string, bool>> fields; };
-struct PtrType          _E { Expr* elem{}; PtrType(Expr*e) :elem(e) {} };
+struct PtrType          _E { Expr* elem{}; CTOR1(PtrType, elem) };
 struct ParamDecl           { bool isVariadic = false, hasName = false; Expr* type{}; string name; };
 struct Param               { vector<ParamDecl*> paramList; };
 struct Signature           { Param* param{}, *resultParam{}; Expr* resultType{}; };
-struct FuncType         _E { Signature * signature{};FuncType(Signature* s):signature(s){} };
+struct FuncType         _E { Signature * signature{}; CTOR1(FuncType,signature) };
 struct InterfaceType    _E { vector<tuple<Name*, Signature*>> method; };
 struct SliceType        _E { Expr* elem{}; };
 struct MapType          _E { Expr* type{}, *elem{}; };
@@ -164,7 +161,6 @@ skip_comment_and_find_next:
         shouldEof = 1;
         return Token(OP_SEMI, ";");
     }
-
     string lexeme;
     // identifier
     if (inrange(c, 'a', 'z') || inrange(c, 'A', 'Z') || c == '_') {
@@ -176,7 +172,6 @@ skip_comment_and_find_next:
             if (keywords[i] == lexeme)  return Token(static_cast<TokenType>(i + 1), lexeme);
         return Token(TK_ID, lexeme);
     }
-
     // decimal 
     if (c >= '0'&&c <= '9' || c == '.') {
         if (c == '0') {
@@ -207,7 +202,7 @@ skip_comment_and_find_next:
                     if (c == '.') {
                         lexeme += consumePeek(c);
                         return Token(OP_VARIADIC, lexeme);
-                    } else REPORT_ERR("lex error", "expect variadic notation(...)");
+                    } else G_ERROR("lex error", "expect variadic notation(...)");
                 } else if (inrange(c, '0', '9')) {
                     type = LIT_FLOAT;
                 } else {
@@ -252,25 +247,20 @@ skip_comment_and_find_next:
                 do lexeme += consumePeek(c); while (inrange(c, '0', '7'));
             else if (anyone(c, 'a', 'b', 'f', 'n', 'r', 't', 'v', '\\', '\'', '"'))
                 lexeme += consumePeek(c);
-            else REPORT_ERR("lex error", "illegal rune");
+            else G_ERROR("lex error", "illegal rune");
         } else lexeme += consumePeek(c);
 
-        if (c != '\'') {
-            REPORT_ERR("lex error", "illegal rune at least in current implementation of g8");
-        }
+        G_ASSERT(c != '\'', "lexer error", "illegal rune");
         lexeme += consumePeek(c);
         return Token(LIT_RUNE, lexeme);
     }
-
     // string literal
     if (c == '`') {
         do {
             lexeme += consumePeek(c);
             if (c == '\n') line++;
         } while (f.good() && c != '`');
-        if (c != '`') {
-            REPORT_ERR("lex error", "raw string literal does not have a closed symbol \"`\"");
-        }
+        G_ASSERT(c != '`', "lexer error", "raw string literal does not have a closed symbol \"`\"");
         lexeme += consumePeek(c);
         return Token(LIT_STR, lexeme);
     } else if (c == '"') {
@@ -281,15 +271,12 @@ skip_comment_and_find_next:
                 lexeme += consumePeek(c);
             }
         } while (f.good() && (c != '\n' && c != '\r' && c != '"'));
-        if (c != '"') {
-            REPORT_ERR("lex error", "string literal does not have a closed symbol");
-        }
+        G_ASSERT(c != '"', "lexer error", "string literal does not have a closed symbol");
         lexeme += consumePeek(c);
         return Token(LIT_STR, lexeme);
     }
 
-    auto match = [&](initializer_list<tuple<pair<char, TokenType>,
-        initializer_list<pair<string_view, TokenType>>,
+    auto match = [&](initializer_list<tuple<pair<char, TokenType>,initializer_list<pair<string_view, TokenType>>,
         pair<string_view, TokenType>>> big) ->Token {
         for (const auto&[v1, v2, v3] : big) {
             if (c == v1.first) {
@@ -309,10 +296,8 @@ skip_comment_and_find_next:
                 return Token(v1.second, lexeme);
             }
         }
-
         return Token(INVALID, "");
     };
-
     // operators
     if(c=='/') { // special case for /  /= // /*...*/
         char pending = consumePeek(c);
@@ -361,20 +346,27 @@ skip_comment_and_find_next:
         {{';',OP_SEMI},     {},                                                 {}},
         {{'%',OP_MOD},      {{"%=",OP_MODAGN}},                                 {}},
     });
-
     if (result.type != INVALID) { return result; }
-    else REPORT_ERR("lex error", "illegal token in source file");
+    else G_ERROR("lex error", "illegal token in source file");
 }
 
 const auto parse(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
     auto t = next(f);
 
-    auto eat = [&](TokenType tk, const string&msg) {
-        if (t.type != tk) throw runtime_error(msg);
+    auto eat = [&](TokenType tk) {
+        G_ASSERT(t.type != tk, "syntax ", "expect " + keywords[tk - 1] + "but got " + keywords[t.type - 1]);
         t = next(f);
     };
-    auto eatOptionalSemi = [&]() { if (t.type == OP_SEMI) t = next(f); };
+    // Simulate EBNF behaviors, see g5/docs/ebnf.md for their explanation if you don't know
+    // They are merely used in the case of simple parsing tasks, while keeping traditional control
+    // flows for those complicated tasks since callback is not enough clear to read for human logic
+    auto option = [&](TokenType specific,auto then) {
+        if (t.type == specific) { t = next(f); then(); }};
+    auto repetition = [&](TokenType endToken, auto work) {
+        do { work(); } while (t.type != endToken); t = next(f); };
+    auto alternation = [&](TokenType specific, auto then, auto otherwise) {
+        if (t.type == specific) { t = next(f); then(); } else { otherwise(); }}; 
 
     LAMBDA_FUN(LitValue);LAMBDA_FUN(Expr); LAMBDA_FUN(UnaryExpr);
     LAMBDA_FUN(PrimaryExpr); LAMBDA_FUN(Stmt); LAMBDA_FUN(IfStmt);
@@ -399,16 +391,15 @@ const auto parse(const string & filename) {
     };
     auto parseIdentList = [&](Token&t) {
         IdentList* node{};
-        if (t.type == TK_ID) {
+        option(TK_ID, [&] {
             node = new  IdentList;
             node->identList.emplace_back(t.lexeme);
-            t = next(f);
             while (t.type == OP_COMMA) {
                 t = next(f);
                 node->identList.emplace_back(t.lexeme);
                 t = next(f);
             }
-        }
+        });
         return node;
     };
     auto parseExprList = [&](Token&t) {
@@ -429,47 +420,36 @@ const auto parse(const string & filename) {
         while ((tmp = parseStmt(t))) {
             if (node == nullptr) node = new StmtList;
             node->stmtList.push_back(tmp);
-            eatOptionalSemi();
+            option(OP_SEMI,[]{});
         }
         return node;
     };
     auto parseBlock = [&](Token&t){
         BlockStmt * node{};
-        if (t.type == OP_LBRACE) {
+        option(OP_LBRACE, [&] {
             node = new BlockStmt;
-            t = next(f);
-            if (t.type != OP_RBRACE) {
-                node->stmtList = parseStmtList(t);
-                eat(OP_RBRACE, "expect } around code block");
-            } else t = next(f);
-        }
+            alternation(OP_RBRACE, [&] {}, [&] {node->stmtList = parseStmtList(t); eat(OP_RBRACE); });});
         return node;
     };
 #pragma endregion
 #pragma region Declaration
     auto parseImportDecl = [&](Token&t) {
         auto node = new ImportDecl;
-        eat(KW_import, "it should be import declaration");
-        if (t.type == OP_LPAREN) {
-            t = next(f);
-            do {
-                string importName, alias;
-                if (t.type == OP_DOT || t.type == TK_ID) {
-                    alias = t.lexeme;
-                    t = next(f);
-                    importName = t.lexeme;
-                } else {
-                    importName = t.lexeme;
-                }
-                importName = importName.substr(1, importName.length() - 2);
-                node->imports[importName] = alias;
-                t = next(f);
-                eatOptionalSemi();
-            } while (t.type != OP_RPAREN);
-            eat(OP_RPAREN, "expect )");
-        } else {
+        eat(KW_import);
+        alternation(OP_LPAREN, [&] { repetition(OP_RPAREN,[&] {
             string importName, alias;
-            if (t.type == OP_DOT || t.type == TK_ID) {
+            if (anyone(t.type, OP_DOT, TK_ID)) {
+                alias = t.lexeme;
+                t = next(f);
+                importName = t.lexeme;
+            } else importName = t.lexeme;
+            importName = importName.substr(1, importName.length() - 2);
+            node->imports[importName] = alias;
+            t = next(f);
+            option(OP_SEMI, [] {});
+        });}, [&] {
+            string importName, alias;
+            if (anyone(t.type, OP_DOT, TK_ID)) {
                 alias = t.lexeme;
                 t = next(f);
                 importName = t.lexeme;
@@ -480,46 +460,27 @@ const auto parse(const string & filename) {
             }
             importName = importName.substr(1, importName.length() - 2);
             node->imports[importName] = alias;
-        }
+        });
         return node;
     };
     auto parseConstDecl = [&](Token&t){
         auto * node = new ConstDecl;
-        eat(KW_const, "it should be const declaration");
-        if (t.type == OP_LPAREN) {
-            t = next(f);
-            do {
-                node->identList.push_back(parseIdentList(t));
-                if (auto*tmp = parseType(t); tmp != nullptr) {
-                    node->type.push_back(tmp);
-                } else {
-                    node->type.push_back(nullptr);
-                }
-                if (t.type == OP_AGN) {
-                    t = next(f);
-                    node->exprList.push_back(parseExprList(t));
-                } else {
-                    node->exprList.push_back(nullptr);
-                }
-                eatOptionalSemi();
-            } while (t.type != OP_RPAREN);
-            eat(OP_RPAREN, "eat right parenthesis");
-        } else {
+        eat(KW_const);
+        alternation(OP_LPAREN, [&] {repetition(OP_RPAREN, [&] {
             node->identList.push_back(parseIdentList(t));
-            if (auto*tmp = parseType(t); tmp != nullptr) {
+            if (auto*tmp = parseType(t); tmp != nullptr)
                 node->type.push_back(tmp);
-            } else {
+            else
                 node->type.push_back(nullptr);
-            }
-            if (t.type == OP_AGN) {
-                t = next(f);
-                node->exprList.push_back(parseExprList(t));
-            } else {
-                node->exprList.push_back(nullptr);
-            }
-            if (t.type != OP_SEMI) throw runtime_error("expect an explicit semicolon");
-        }
-
+            alternation(OP_AGN, [&] {node->exprList.push_back(parseExprList(t)); }, [&] {node->exprList.push_back(nullptr); });
+            option(OP_SEMI, [] {});
+        });}, [&] {
+            node->identList.push_back(parseIdentList(t));
+            if (auto*tmp = parseType(t); tmp != nullptr)    node->type.push_back(tmp);
+            else                                           node->type.push_back(nullptr);
+            alternation(OP_AGN, [&] {node->exprList.push_back(parseExprList(t)); }, [&] {node->exprList.push_back(nullptr); });
+            if (t.type != OP_SEMI) G_ERROR("syntax error", "expect an explicit semicolon");
+        });
         return node;
     };
     auto parseTypeSpec = [&](Token&t) {
@@ -528,26 +489,17 @@ const auto parse(const string & filename) {
             node = new TypeSpec;
             node->ident = t.lexeme;
             t = next(f);
-            if (t.type == OP_AGN) {
-                t = next(f);
-            }
+            option(OP_AGN, [] {});
             node->type = parseType(t);
         }
         return node;
     };
     auto parseTypeDecl = [&](Token&t) {
         auto * node = new TypeDecl;
-        eat(KW_type, "it should be type declaration");
-        if (t.type == OP_LPAREN) {
-            t = next(f);
-            do {
-                node->typeSpec.push_back(parseTypeSpec(t));
-                eatOptionalSemi();
-            } while (t.type != OP_RPAREN);
-            eat(OP_RPAREN, "expect )");
-        } else {
-            node->typeSpec.push_back(parseTypeSpec(t));
-        }
+        eat(KW_type);
+        alternation(OP_LPAREN, [&] {
+            repetition(OP_RPAREN, [&] {node->typeSpec.push_back(parseTypeSpec(t));option(OP_SEMI, [] {}); });
+        }, [&] {node->typeSpec.push_back(parseTypeSpec(t)); });
         return node;
     };
     auto parseVarSpec = [&](Token&t){
@@ -555,32 +507,17 @@ const auto parse(const string & filename) {
         if (auto*tmp = parseIdentList(t); tmp != nullptr) {
             node = new VarSpec;
             node->identList = tmp;
-            if (t.type == OP_AGN) {
-                t = next(f);
-                node->exprList = parseExprList(t);
-            } else {
-                node->type = parseType(t);
-                if (t.type == OP_AGN) {
-                    t = next(f);
-                    node->exprList = parseExprList(t);
-                }
-            }
+            alternation(OP_AGN, [&] {node->exprList = parseExprList(t); },
+                [&] {node->type = parseType(t); option(OP_AGN, [&] {node->exprList = parseExprList(t); }); });
         }
         return node;
     };
     auto parseVarDecl = [&](Token&t) {
         auto * node = new VarDecl;
-        eat(KW_var, "it should be var declaration");
-        if (t.type == OP_LPAREN) {
-            do {
-                node->varSpec.push_back(parseVarSpec(t));
-                t = next(f);
-            } while (t.type != OP_RPAREN);
-            eat(OP_RPAREN, "expect )");
-        } else {
-            node->varSpec.push_back(parseVarSpec(t));
-        }
-
+        eat(KW_var);
+        alternation(OP_LPAREN, [&] {
+            repetition(OP_RPAREN, [&] {node->varSpec.push_back(parseVarSpec(t)); option(OP_SEMI, [] {}); });
+        }, [&] {node->varSpec.push_back(parseVarSpec(t)); });
         return node;
     };
     auto parseParamDecl = [&](Token&t) {
@@ -595,45 +532,32 @@ const auto parse(const string & filename) {
             auto*mayIdentOrType = parseType(t);
             if (t.type != OP_COMMA && t.type != OP_RPAREN) {
                 node->hasName = true;
-                if (t.type == OP_VARIADIC) {
-                    node->isVariadic = true;
-                    t = next(f);
-                }
+                option(OP_VARIADIC, [&] {node->isVariadic = true; });
                 node->name = dynamic_cast<Name*>(mayIdentOrType)->name;
                 node->type = parseType(t);
-            } else {
-                node->type = mayIdentOrType;
-            }
+            } else node->type = mayIdentOrType;
         }
         return node;
     };
     auto parseParam = [&](Token&t){
         Param* node{};
-        if (t.type == OP_LPAREN) {
+        option(OP_LPAREN, [&] {
             node = new Param;
-            t = next(f);
-            do {
-                if (auto * tmp = parseParamDecl(t); tmp != nullptr) {
-                    node->paramList.push_back(tmp);
-                }
-                if (t.type == OP_COMMA) {
-                    t = next(f);
-                }
-            } while (t.type != OP_RPAREN);
-            t = next(f);
-
+            repetition(OP_RPAREN, [&] {
+                if (auto * tmp = parseParamDecl(t); tmp != nullptr) { node->paramList.push_back(tmp); }
+                option(OP_COMMA, [] {}); });
             for (int i = 0, rewriteStart = 0; i < node->paramList.size(); i++) {
                 if (dynamic_cast<ParamDecl*>(node->paramList[i])->hasName) {
                     for (int k = rewriteStart; k < i; k++) {
                         string name = dynamic_cast<Name*>(node->paramList[k]->type)->name;
                         node->paramList[k]->type = node->paramList[i]->type;
                         node->paramList[k]->name = name;
-                        node->paramList[k]->hasName = true; //It's not necessary
+                        node->paramList[k]->hasName = true; 
                     }
                     rewriteStart = i + 1;
                 }
             }
-        }
+        });
         return node;
     };
     auto parseSignature = [&](Token&t){
@@ -651,7 +575,7 @@ const auto parse(const string & filename) {
     };
     auto parseFuncDecl = [&](bool anonymous, Token&t){
         auto * node = new FuncDecl;
-        eat(KW_func, "it should be function declaration");
+        eat(KW_func);
         if (!anonymous) {
             if (t.type == OP_LPAREN) node->receiver = parseParam(t);
             node->funcName = t.lexeme;
@@ -667,93 +591,67 @@ const auto parse(const string & filename) {
 #pragma region Type
     auto parseArrayOrSliceType = [&](Token&t) {
         Expr* node{};
-        eat(OP_LBRACKET, "array/slice type requires [ to denote that");
+        eat(OP_LBRACKET);
         nestLev++;
-        if (t.type != OP_RBRACKET) {
+        alternation(OP_RBRACKET, [&] {
+            node = new SliceType;
+            nestLev--;
+            dynamic_cast<SliceType*>(node)->elem = parseType(t);
+        }, [&] {
             node = new ArrayType;
-            if (t.type == OP_VARIADIC) {
-                dynamic_cast<ArrayType*>(node)->autoLen = true;
-                t = next(f);
-            }
-            else dynamic_cast<ArrayType*>(node)->len = parseExpr(t);
+            alternation(OP_VARIADIC, [&] {dynamic_cast<ArrayType*>(node)->autoLen = true; },
+                [&] {dynamic_cast<ArrayType*>(node)->len = parseExpr(t); });
             nestLev--;
             t = next(f);
             dynamic_cast<ArrayType*>(node)->elem = parseType(t);
-        }
-        else {
-            node = new SliceType;
-            nestLev--;
-            t = next(f);
-            dynamic_cast<SliceType*>(node)->elem = parseType(t);
-        }
+        });
         return node;
     };
     auto parseStructType = [&](Token&t){
         auto * node = new  StructType;
-        eat(KW_struct, "structure type requires struct keyword");
-        eat(OP_LBRACE, "a { is required after struct");
-        do {
+        eat(KW_struct); option(OP_SEMI, [] {}); eat(OP_LBRACE);
+        repetition(OP_RBRACE, [&] {
             tuple<Expr*, Expr*, string, bool> field;// <IdentList/Name,Type,Tag,isEmbeded>
             if (auto * tmp = parseIdentList(t); tmp != nullptr) {
                 get<0>(field) = tmp;
                 get<1>(field) = parseType(t);
                 get<3>(field) = false;
-            }
-            else {
-                if (t.type == OP_MUL) {
-                    get<3>(field) = true;
-                    t = next(f);
-                }
+            } else {
+                option(OP_MUL, [&] {get<3>(field) = true;});
                 get<0>(field) = parseName(true, t);
             }
-            if (t.type == LIT_STR) get<2>(field) = t.lexeme;  
+            if (t.type == LIT_STR) get<2>(field) = t.lexeme;
             node->fields.push_back(field);
-            eatOptionalSemi();
-        } while (t.type != OP_RBRACE);
-        eat(OP_RBRACE, "expect }");
-        eatOptionalSemi();
+            option(OP_SEMI, [] {});
+        });
+        option(OP_SEMI,[]{});
         return node;
     };
     auto parseInterfaceType = [&](Token&t){
         auto * node = new InterfaceType;
-        eat(KW_interface, "interface type requires keyword interface");
-        eat(OP_LBRACE, "{ is required after interface");
+        eat(KW_interface);eat(OP_LBRACE);
         while (t.type != OP_RBRACE) {
             if (auto* tmp = parseName(true, t); tmp != nullptr && tmp->name.find('.') == string::npos)
                 node->method.emplace_back(tmp, parseSignature(t));
             else node->method.emplace_back(tmp, nullptr);
-            
-            eatOptionalSemi();
+            option(OP_SEMI,[]{});
         }
         t = next(f);
         return node;
     };
     auto parseMapType = [&](Token&t){
         auto * node = new MapType;
-        eat(KW_map, "map type requires keyword map to denote that");
-        eat(OP_LBRACKET, "[ is required after map");
+        eat(KW_map);eat(OP_LBRACKET);
         node->type = parseType(t);
-        eat(OP_RBRACKET, "] is required after map[Key");
+        eat(OP_RBRACKET);
         node->elem = parseType(t);
         return node;
     };
     auto parseChanType = [&](Token&t){
         ChanType* node{};
-        if (t.type == KW_chan) {
+        option(KW_chan, [&] {
             node = new ChanType;
-            t = next(f);
-            if (t.type == OP_CHAN) {
-                t = next(f);
-                node->elem = parseType(t);
-            } else {
-                node->elem = parseType(t);
-            }
-        }
-        else if (t.type == OP_CHAN) {
-            node = new ChanType;
-            t = next(f);
-            if (t.type == KW_chan) node->elem = parseType(t);
-        }
+            alternation(OP_CHAN, [&] {node->elem = parseType(t); }, [&] {node->elem = parseType(t); }); });
         return node;
     };
     parseType = [&](Token&t)->Expr* {
@@ -774,105 +672,55 @@ const auto parse(const string & filename) {
 #pragma region Statement
     auto parseSimpleStmt = [&](ExprList* lhs, Token&t)->Stmt* {
         if (t.type == KW_range) {    //special case for ForStmt
-            auto*stmt = new SRangeClause;
             t = next(f);
-            stmt->rhs = parseExpr(t);
-            return stmt;
+            return new SRangeClause{ vector<string>(),parseExpr(t) };
         }
         if (lhs == nullptr) lhs = parseExprList(t);
-
         switch (t.type) {
-        case OP_CHAN: {
-            if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
-            t = next(f);
-            auto* stmt = new SendStmt;
-            stmt->receiver = lhs->exprList[0];
-            stmt->sender = parseExpr(t);
-            return stmt;
-        }
-        case OP_INC:case OP_DEC: {
-            if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
-            auto* stmt = new IncDecStmt;
-            stmt->isInc = t.type == OP_INC;
-            t = next(f);
-            stmt->expr = lhs->exprList[0];
-            return stmt;
-        }
+        case OP_CHAN:           {t = next(f); return new SendStmt{ lhs->exprList[0],parseExpr(t) }; }
+        case OP_INC:case OP_DEC:{auto tmp = t.type; t = next(f); return new IncDecStmt{lhs->exprList[0],tmp==OP_INC}; }
         case OP_SHORTAGN: {
-            if (lhs->exprList.empty()) throw runtime_error("one expr required");
-
             vector<string> identList;
             for (auto* e : lhs->exprList) {
                 string identName = dynamic_cast<Name*>(dynamic_cast<PrimaryExpr*>(e->lhs->expr)->expr)->name;
                 identList.push_back(identName);
             }
             t = next(f);
-            if (t.type == KW_range) {
-                t = next(f);
-                auto* stmt = new SRangeClause;
-                stmt->lhs = move(identList);
-                stmt->rhs = parseExpr(t);
-                return stmt;
-            }
-            else {
-                auto*stmt = new SAssignStmt;
-                stmt->lhs = move(identList);
-                stmt->rhs = parseExprList(t);
-                return stmt;
-            }
+            Stmt* stmt{};
+            alternation(KW_range,[&] {stmt = new SRangeClause{ move(identList), parseExpr(t) }; },
+                [&] {stmt = new SAssignStmt{ move(identList) ,parseExprList(t) }; });
+            return stmt;
         }
         case OP_ADDAGN:case OP_SUBAGN:case OP_ORAGN:case OP_XORAGN:case OP_MULAGN:case OP_DIVAGN:
         case OP_MODAGN:case OP_LSFTAGN:case OP_RSFTAGN:case OP_ANDAGN:case OP_ANDXORAGN:case OP_AGN: {
             if (lhs->exprList.empty()) throw runtime_error("one expr required");
             auto op = t.type;
             t = next(f);
-            if (t.type == KW_range) {
-                t = next(f);
-                auto* stmt = new RangeClause;
-                stmt->lhs = lhs;
-                stmt->op = op;
-                stmt->rhs = parseExpr(t);
-                return stmt;
-            }
-            else {
-                auto* stmt = new AssignStmt;
-                stmt->lhs = lhs;
-                stmt->op = op;
-                stmt->rhs = parseExprList(t);
-                return stmt;
-            }
-
-        }
-        default: {//ExprStmt
-            if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
-            auto* stmt = new ExprStmt;
-            stmt->expr = lhs->exprList[0];
+            Stmt* stmt{};
+            alternation(KW_range,[&] {stmt = new RangeClause{ lhs,op,parseExpr(t) }; },
+                [&] {stmt = new AssignStmt{ lhs,op,parseExprList(t)}; });
             return stmt;
         }
+        default: {return new ExprStmt{ lhs->exprList[0] }; }//ExprStmt
         }
     };
     parseIfStmt = [&](Token&t)->IfStmt* {
         const int outLev = nestLev;
         nestLev = -1;
-        eat(KW_if, "expect keyword if");
         auto * node = new IfStmt;
         if (t.type == OP_LBRACE) throw runtime_error("if statement requires a condition");
         auto* tmp = parseSimpleStmt(nullptr, t);
-        if (t.type == OP_SEMI) {
-            node->init = tmp;
-            t = next(f);
-            node->cond = parseExpr(t);
-        }
-        else node->cond = dynamic_cast<ExprStmt*>(tmp)->expr;
-
-        node->ifBlock = parseBlock(t);
-        if (t.type == KW_else) {
-            t = next(f);
-            if (t.type == KW_if)            node->elseBlock = parseIfStmt(t);   
-            else if (t.type == OP_LBRACE)   node->elseBlock = parseBlock(t);
-            else throw runtime_error("only else-if or else could place here");
-        }
+        alternation(OP_SEMI, 
+            [&] {node->init = tmp; node->cond = parseExpr(t); },
+            [&] {node->cond = dynamic_cast<ExprStmt*>(tmp)->expr; });
         nestLev = outLev;
+        
+        node->ifBlock = parseBlock(t);
+        option(KW_else, [&] {
+            if (t.type == KW_if) {t = next(f); node->elseBlock = parseIfStmt(t);}
+            else if (t.type == OP_LBRACE)   node->elseBlock = parseBlock(t);
+            else G_ERROR("syntax error", "only else-if or else could place here");
+        });
         return node;
     };
     auto parseSwitchCase = [&](Token&t) {
@@ -881,13 +729,12 @@ const auto parse(const string & filename) {
             node = new SwitchCase;
             t = next(f);
             node->exprList = parseExprList(t);
-            eat(OP_COLON, "statements in each case requires colon to separate");
+            eat(OP_COLON);
             node->stmtList = parseStmtList(t);
-        }
-        else if (t.type == KW_default) {
+        } else if (t.type == KW_default) {
             node = new SwitchCase;
             t = next(f);
-            eat(OP_COLON, "expect : after default label");
+            eat(OP_COLON);
             node->stmtList = parseStmtList(t);
         }
         return node;
@@ -895,19 +742,17 @@ const auto parse(const string & filename) {
     auto parseSwitchStmt = [&](Token&t) {
         const int outLev = nestLev;
         nestLev = -1;
-        eat(KW_switch, "expect keyword switch");
         auto * node = new SwitchStmt;
         if (t.type != OP_LBRACE) {
             node->init = parseSimpleStmt(nullptr, t);
-            if (t.type == OP_SEMI) t = next(f);
+            option(OP_SEMI, [] {});
             if (t.type != OP_LBRACE) node->cond = parseSimpleStmt(nullptr, t);
         }
-        eat(OP_LBRACE, "expec { after switch header");
-        do {
-            if (auto*tmp = parseSwitchCase(t); tmp != nullptr) node->caseList.push_back(tmp);
-        } while (t.type != OP_RBRACE);
-        t = next(f);
         nestLev = outLev;
+
+        eat(OP_LBRACE);
+        repetition(OP_RBRACE, 
+            [&] {if (auto*tmp = parseSwitchCase(t); tmp != nullptr) node->caseList.push_back(tmp); });
         return node;
     };
     auto parseSelectCase = [&](Token&t){
@@ -916,34 +761,25 @@ const auto parse(const string & filename) {
             node = new SelectCase;
             t = next(f);
             auto*tmp = parseSimpleStmt(nullptr, t);
-            eat(OP_COLON, "statements in each case requires colon to separate");
+            eat(OP_COLON);
             node->stmtList = parseStmtList(t);
-        }
-        else if (t.type == KW_default) {
+        } else if (t.type == KW_default) {
             node = new SelectCase;
             t = next(f);
-            eat(OP_COLON, "expect : after default label");
+            eat(OP_COLON);
             node->stmtList = parseStmtList(t);
         }
         return node;
     };
     auto parseSelectStmt = [&](Token&t) {
-        const int outLev = nestLev;
-        nestLev = -1;
-        eat(KW_select, "expect keyword select");
-        eat(OP_LBRACE, "expect { after select keyword");
+        eat(OP_LBRACE);
         auto* node = new SelectStmt;
-        do {
-            if (auto*tmp = parseSelectCase(t); tmp != nullptr) node->caseList.push_back(tmp);
-        } while (t.type != OP_RBRACE);
-        t = next(f);
-        nestLev = outLev;
+        repetition(OP_RBRACE,[&] {if (auto*tmp = parseSelectCase(t); tmp != nullptr) node->caseList.push_back(tmp); });
         return node;
     };
     auto parseForStmt = [&](Token&t){
         const int outLev = nestLev;
         nestLev = -1;
-        eat(KW_for, "expect keyword for");
         auto* node = new ForStmt;
         if (t.type != OP_LBRACE) {
             if (t.type != OP_SEMI) {
@@ -955,24 +791,22 @@ const auto parse(const string & filename) {
                     break;
                 case OP_SEMI:
                     node->init = tmp;
-                    eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
+                    eat(OP_SEMI);
                     node->cond = parseExpr(t);
-                    eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
+                    eat(OP_SEMI);
                     if (t.type != OP_LBRACE)node->post = parseSimpleStmt(nullptr, t);
                     break;
-                default:throw runtime_error("expect {/;/range/:=/=");
+                default:G_ERROR("syntax error", "expect {/;/range/:=/=");
                 }
-            }
-            else {  // for ;cond;post{}
+            } else {  // for ;cond;post{}
                 t = next(f);
-                node->init = nullptr;
                 node->cond = parseExpr(t);
-                eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
+                eat(OP_SEMI);
                 if (t.type != OP_LBRACE) node->post = parseSimpleStmt(nullptr, t);
             }
         }
-        node->block = parseBlock(t);
         nestLev = outLev;
+        node->block = parseBlock(t);
         return node;
     };
     parseStmt = [&](Token&t)->Stmt* {
@@ -987,23 +821,22 @@ const auto parse(const string & filename) {
         case KW_continue:   t = next(f);  return new ContinueStmt(t.type == TK_ID ? t.lexeme : "");
         case KW_goto:       t = next(f);  return new GotoStmt(t.lexeme);
         case KW_defer:      t = next(f);  return new DeferStmt(parseExpr(t));
-        case KW_if:         return parseIfStmt(t);
-        case KW_switch:     return parseSwitchStmt(t);
-        case KW_select:     return parseSelectStmt(t);
-        case KW_for:        return parseForStmt(t);
+        case KW_if:         t = next(f);  return parseIfStmt(t);
+        case KW_switch:     t = next(f);  return parseSwitchStmt(t);
+        case KW_select:     t = next(f);  return parseSelectStmt(t);
+        case KW_for:        t = next(f);  return parseForStmt(t);
         case OP_LBRACE:     return parseBlock(t);
         case OP_SEMI:       return nullptr;
         case OP_ADD:case OP_SUB:case OP_NOT:case OP_XOR:case OP_MUL:case OP_CHAN:
         case LIT_STR:case LIT_INT:case LIT_IMG:case LIT_FLOAT:case LIT_RUNE:
         case KW_func:case KW_struct:case KW_map:case OP_LBRACKET:case TK_ID: case OP_LPAREN:{
+            // It shall a labeled statement(not part of simple stmt so we handle it here)
             auto* exprList = parseExprList(t);
-            if (t.type == OP_COLON) { 
-                //it shall a labeled statement(not part of simple stmt so we handle it here)
-                t = next(f);
-                return new LabeledStmt(
-                    dynamic_cast<Name*>(dynamic_cast<PrimaryExpr*>(exprList->exprList[0]->lhs->expr)->expr)->name,
-                    parseStmt(t));
-            } else return parseSimpleStmt(exprList, t);
+            Stmt*result{};
+            alternation(OP_COLON, [&] { result = new LabeledStmt(dynamic_cast<Name*>(
+                    dynamic_cast<PrimaryExpr*>(exprList->exprList[0]->lhs->expr)->expr)->name,parseStmt(t));
+            }, [&] {result = parseSimpleStmt(exprList, t); });
+            return result;
         }
         }
         return nullptr;
@@ -1048,21 +881,18 @@ const auto parse(const string & filename) {
             nestLev++; 
             auto* e = parseExpr(t); 
             nestLev--; 
-            eat(OP_RPAREN, "expect )"); 
+            eat(OP_RPAREN); 
             return e;
         } else if (anyone(t.type, LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR)) {
             auto*tmp = new BasicLit(t.type, t.lexeme); t = next(f); return tmp;
         } else if (anyone(t.type, KW_struct, KW_map, OP_LBRACKET, KW_chan, KW_interface)) {
             return parseType(t);
         } else return nullptr;
-
     };
     parsePrimaryExpr = [&](Token&t)->PrimaryExpr* {
         PrimaryExpr*node{};
         if (auto*tmp = parseOperand(t); tmp != nullptr) {
             node = new PrimaryExpr;
-            // eliminate left-recursion by infinite loop; these code referenced golang official impl
-            // since this work requires somewhat familiarity of golang syntax
             while (true) {
                 if (t.type == OP_DOT) {
                     t = next(f);
@@ -1071,18 +901,14 @@ const auto parse(const string & filename) {
                         t = next(f);
                     } else if (t.type == OP_LPAREN) {
                         t = next(f);
-                        if (t.type == KW_type) {
-                            tmp = new TypeSwitchExpr(tmp);
-                            t = next(f);
-                        } else {
-                            tmp = new TypeAssertExpr(tmp, parseType(t));
-                        }
-                        eat(OP_RPAREN, "expect )");
-                    }
+                        alternation(KW_type, [&] { tmp = new TypeSwitchExpr(tmp); },
+                            [&] {tmp = new TypeAssertExpr(tmp, parseType(t)); });
+                        eat(OP_RPAREN);
+                    } else G_ERROR("syntax error", "expec identifier or (");
                 } else if (t.type == OP_LBRACKET) {
                     nestLev++;
                     t = next(f);
-                    Expr* start = nullptr;//Ignore start if next token is :(syntax of operand[:xxx])
+                    Expr* start{};//Ignore start if next token is :(syntax of operand[:xxx])
                     if (t.type != OP_COLON) {
                         start = parseExpr(t);
                         if (t.type == OP_RBRACKET) {
@@ -1095,15 +921,15 @@ const auto parse(const string & filename) {
                     auto* e = new SliceExpr;
                     e->operand = tmp;
                     e->begin = start;
-                    eat(OP_COLON, "expect : in slice expression");
+                    eat(OP_COLON);
                     e->end = parseExpr(t);//may nullptr
                     if (t.type == OP_COLON) {
                         t = next(f);
                         e->step = parseExpr(t);
-                        eat(OP_RBRACKET, "expect ] at the end of slice expression");
-                    } else if (t.type == OP_RBRACKET) {
-                        t = next(f);
+                        eat(OP_RBRACKET);
                     }
+                    else if (t.type == OP_RBRACKET) t = next(f);
+                    else G_ERROR("syntax error", "expec : or ]");
                     tmp = e;
                     nestLev--;
                 } else if (t.type == OP_LPAREN) {
@@ -1111,25 +937,17 @@ const auto parse(const string & filename) {
                     auto* e = new CallExpr;
                     e->operand = tmp;
                     nestLev++;
-                    if (auto*tmp1 = parseExprList(t); tmp1 != nullptr) {
-                        e->arguments = tmp1;
-                    }
-                    if (t.type == OP_VARIADIC) {
-                        e->isVariadic = true;
-                        t = next(f);
-                    }
+                    if (auto*tmp1 = parseExprList(t); tmp1 != nullptr) e->arguments = tmp1;
+                    option(OP_VARIADIC, [&] {e->isVariadic = true; });
                     nestLev--;
-                    eat(OP_RPAREN, "() must match in call expr");
+                    eat(OP_RPAREN);
                     tmp = e;
                 }else if (t.type == OP_LBRACE) {
-                    // only operand has literal value, otherwise, treats it as a block
+                    // Only operand has literal value, otherwise, treats it as a block
+                    // It's somewhat curious since official implementation treats literal type and literal value as separate parts
                     if (anyone(typeid(*tmp), typeid(ArrayType), typeid(SliceType), typeid(StructType), typeid(MapType))
                         || ((anyone(typeid(*tmp), typeid(Name), typeid(SelectorExpr))) && nestLev >= 0)) {
-                        // it's somewhat curious since official implementation treats literal type and literal value as separate parts
-                        auto* e = new CompositeLit;
-                        e->litName = tmp;
-                        e->litValue = parseLitValue(t);
-                        tmp = e;
+                        tmp = new CompositeLit{ tmp,parseLitValue(t) };
                     } else break;
                 } else break;
             }
@@ -1137,25 +955,11 @@ const auto parse(const string & filename) {
         }
         return node;
     };
-    auto parseKey = [&](Token&t)->Expr* {
-        if (t.type == TK_ID)                                    return parseName(false, t);
-        else if (auto*tmp = parseLitValue(t); tmp != nullptr)   return tmp;
-        else if (auto*tmp = parseExpr(t); tmp != nullptr)       return tmp;
-        return nullptr;
-    };
     auto parseKeyedElement = [&](Token&t){
-        KeyedElement*node{};
-        if (auto*tmp = parseKey(t); tmp != nullptr) {
-            node = new KeyedElement;
-            node->elem = tmp;
-            if (t.type == OP_COLON) {
-                node->key = tmp;
-                t = next(f);
-                if (auto*tmp1 = parseExpr(t); tmp1 != nullptr)          node->elem = tmp1;
-                else if (auto*tmp1 = parseLitValue(t); tmp1 != nullptr) node->elem = tmp1;
-                else node->elem = nullptr;
-            }
-        }
+        auto*node = new KeyedElement;
+        node->elem = (t.type == OP_LBRACE) ? parseLitValue(t) : parseExpr(t); 
+        option(OP_COLON, 
+            [&] {node->key = node->elem; node->elem = (t.type == OP_LBRACE) ? parseLitValue(t) : parseExpr(t); });
         return node;
     };
     parseLitValue = [&](Token&t)->LitValue* {
@@ -1163,12 +967,11 @@ const auto parse(const string & filename) {
         if (t.type == OP_LBRACE) {
             nestLev++;
             node = new LitValue;
-            do {
+            repetition(OP_RBRACE, [&] {
                 t = next(f);
-                if (t.type == OP_RBRACE) break; // it's necessary since both {a,b} or {a,b,} are legal form
+                if (t.type == OP_RBRACE) return; // it's necessary since both {a,b} or {a,b,} are legal form
                 node->keyedElement.push_back(parseKeyedElement(t));
-            } while (t.type != OP_RBRACE);
-            eat(OP_RBRACE, "brace {} must match");
+            });
             nestLev--;
         }
         return node;
@@ -1176,10 +979,9 @@ const auto parse(const string & filename) {
 #pragma endregion
     // parsing startup
     auto * node = new CompilationUnit;
-    eat(KW_package, "a go source file must start with package declaration");
+    eat(KW_package);
     node->package = t.lexeme;
-    eat(TK_ID, "name required at the package declaration");
-    eat(OP_SEMI, "expect ; at the end of package declaration");
+    eat(TK_ID);eat(OP_SEMI);
     while (t.type != TK_EOF) {
         switch (t.type) {
         case KW_import: node->importDecl.push_back(parseImportDecl(t));     break;
@@ -1188,7 +990,7 @@ const auto parse(const string & filename) {
         case KW_var:    node->varDecl.push_back(parseVarDecl(t));           break;
         case KW_func:   node->funcDecl.push_back(parseFuncDecl(false, t));  break;
         case OP_SEMI:   t = next(f);                                        break;
-        default:        REPORT_ERR("syntax error","unknown top level declaration"); 
+        default:        G_ERROR("syntax error","unknown top level declaration"); 
         }
     }
     return node;
@@ -1205,17 +1007,14 @@ void printLex(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
     while (lastToken != TK_EOF) {
         auto[token, lexeme] = next(f);
-        fprintf(stdout, "<%d,%s,%d,%d>\n", token, lexeme.c_str(), line, column);
+        cout << "<" << token << "," << lexeme << "," << line << "," << column << ">\n";
     }
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 2 || argv[1] == nullptr) {
-        fprintf(stderr, "specify your go source file\n");
-        return 1;
-    }
+    if (argc < 2 || argv[1] == nullptr) G_ERROR("fatal error", "specify your go source file\n");
     //printLex(argv[1]);
     const CompilationUnit* ast = parse(argv[1]);
-    fprintf(stdout, "parsing passed\n");
+    cout << "parsing passed\n";
     return 0;
 }
