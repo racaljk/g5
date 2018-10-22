@@ -54,12 +54,10 @@ enum TokenType : signed int {
 #define CTOR2(NAME,FD1,FD2)     NAME(decltype(FD1) FD1, decltype(FD2) FD2):FD1(FD1),FD2(FD2){}
 #define CTOR3(NAME,FD1,FD2,FD3) NAME(decltype(FD1) FD1, decltype(FD2) FD2, decltype(FD3) FD3)\
                                 :FD1(FD1),FD2(FD2),FD3(FD3){}
-struct UnaryExpr;
 struct Node                { virtual ~Node() = default; };
-struct Expr             _N { UnaryExpr* lhs{}; TokenType op{}; Expr* rhs{}; };
-struct UnaryExpr        _E { Expr*expr{}; TokenType op{}; };
-struct PrimaryExpr      _E { Expr* expr{}; };
+struct Expr             _N {};
 struct Stmt             _N {};
+struct BasicExpr        _E { Expr*lhs{}, *rhs{}; TokenType op{}; };
 struct IdentList        _E { vector<string> identList; };
 struct ExprList         _E { vector<Expr*> exprList; };
 struct StmtList         _E { vector<Stmt*> stmtList; };
@@ -368,9 +366,8 @@ const auto parse(const string & filename) {
     auto alternation = [&](TokenType specific, auto then, auto otherwise) {
         if (t.type == specific) { t = next(f); then(); } else { otherwise(); }}; 
 
-    LAMBDA_FUN(LitValue);LAMBDA_FUN(Expr); LAMBDA_FUN(UnaryExpr);
-    LAMBDA_FUN(PrimaryExpr); LAMBDA_FUN(Stmt); LAMBDA_FUN(IfStmt);
-    function<Expr*(Token&)> parseType;
+    LAMBDA_FUN(LitValue);LAMBDA_FUN(Stmt); LAMBDA_FUN(IfStmt);
+    function<Expr*(Token&)> parseType, parseUnaryExpr, parsePrimaryExpr,parseExpr;
 
 #pragma region Common
     auto parseName = [&](bool couldFullName, Token&t) {
@@ -682,7 +679,7 @@ const auto parse(const string & filename) {
         case OP_SHORTAGN: {
             vector<string> identList;
             for (auto* e : lhs->exprList) {
-                string identName = dynamic_cast<Name*>(dynamic_cast<PrimaryExpr*>(e->lhs->expr)->expr)->name;
+                string identName = dynamic_cast<Name*>(dynamic_cast<BasicExpr*>(e)->lhs)->name;
                 identList.push_back(identName);
             }
             t = next(f);
@@ -834,7 +831,7 @@ const auto parse(const string & filename) {
             auto* exprList = parseExprList(t);
             Stmt*result{};
             alternation(OP_COLON, [&] { result = new LabeledStmt(dynamic_cast<Name*>(
-                    dynamic_cast<PrimaryExpr*>(exprList->exprList[0]->lhs->expr)->expr)->name,parseStmt(t));
+                dynamic_cast<BasicExpr*>(exprList->exprList[0])->lhs)->name,parseStmt(t));
             }, [&] {result = parseSimpleStmt(exprList, t); });
             return result;
         }
@@ -844,9 +841,9 @@ const auto parse(const string & filename) {
 #pragma endregion
 #pragma region Expression
     parseExpr = [&](Token&t)->Expr* {
-        Expr* node{};
+        BasicExpr* node{};
         if (auto*tmp = parseUnaryExpr(t); tmp != nullptr) {
-            node = new  Expr;
+            node = new  BasicExpr;
             node->lhs = tmp;
             if (anyone(t.type, OP_OR, OP_AND, OP_EQ, OP_NE, OP_LT, OP_LE, OP_XOR, OP_GT, OP_GE, OP_ADD,
                 OP_SUB, OP_BITOR, OP_XOR, OP_ANDXOR, OP_MUL, OP_DIV, OP_MOD, OP_LSHIFT, OP_RSHIFT, OP_BITAND)) {
@@ -857,19 +854,16 @@ const auto parse(const string & filename) {
         }
         return node;
     };
-    parseUnaryExpr = [&](Token&t)->UnaryExpr* {
-        UnaryExpr* node{};
+    parseUnaryExpr = [&](Token&t)->Expr* {
         if (anyone(t.type, OP_ADD, OP_SUB, OP_NOT, OP_XOR, OP_MUL, OP_BITAND, OP_CHAN)) {
-            node = new UnaryExpr;
+            auto* node = new BasicExpr;
             node->op = t.type;
             t = next(f);
-            node->expr = parseUnaryExpr(t);
+            node->lhs = parseUnaryExpr(t);
         } else if (anyone(t.type, TK_ID, LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR,
             KW_struct, KW_map, OP_LBRACKET, KW_chan, KW_interface, KW_func, OP_LPAREN)) {
-            node = new UnaryExpr;
-            node->expr = parsePrimaryExpr(t);
-        }
-        return node;
+            return parsePrimaryExpr(t);
+        } else return nullptr;
     };
     auto parseOperand = [&](Token&t)->Expr* {
         if (t.type == TK_ID) {
@@ -889,10 +883,8 @@ const auto parse(const string & filename) {
             return parseType(t);
         } else return nullptr;
     };
-    parsePrimaryExpr = [&](Token&t)->PrimaryExpr* {
-        PrimaryExpr*node{};
+    parsePrimaryExpr = [&](Token&t)->Expr* {
         if (auto*tmp = parseOperand(t); tmp != nullptr) {
-            node = new PrimaryExpr;
             while (true) {
                 if (t.type == OP_DOT) {
                     t = next(f);
@@ -951,9 +943,9 @@ const auto parse(const string & filename) {
                     } else break;
                 } else break;
             }
-            node->expr = tmp;
+            return tmp;
         }
-        return node;
+        return nullptr;
     };
     auto parseKeyedElement = [&](Token&t){
         auto*node = new KeyedElement;
