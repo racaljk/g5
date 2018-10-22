@@ -52,7 +52,8 @@ enum TokenType : signed int {
 #define _N :public Node
 #define CTOR1(NAME,FD1)         NAME(decltype(FD1) FD1):FD1(FD1){}
 #define CTOR2(NAME,FD1,FD2)     NAME(decltype(FD1) FD1, decltype(FD2) FD2):FD1(FD1),FD2(FD2){}
-#define CTOR3(NAME,FD1,FD2,FD3) NAME(decltype(FD1) FD1, decltype(FD2) FD2, decltype(FD3) FD3):FD1(FD1),FD2(FD2),FD3(FD3){}
+#define CTOR3(NAME,FD1,FD2,FD3) NAME(decltype(FD1) FD1, decltype(FD2) FD2, decltype(FD3) FD3)\
+                                :FD1(FD1),FD2(FD2),FD3(FD3){}
 struct UnaryExpr;
 struct Node                { virtual ~Node() = default; };
 struct Expr             _N { UnaryExpr* lhs{}; TokenType op{}; Expr* rhs{}; };
@@ -82,7 +83,7 @@ struct SRangeClause     _S { vector<string> lhs; Expr* rhs{}; CTOR2(SRangeClause
 struct RangeClause      _S { ExprList* lhs{}; TokenType op; Expr* rhs{}; CTOR3(RangeClause,lhs,op,rhs)};
 struct ExprStmt         _S { Expr* expr{}; CTOR1(ExprStmt,expr) };
 struct SendStmt         _S { Expr* receiver{}, *sender{}; CTOR2(SendStmt, receiver, sender) };
-struct IncDecStmt       _S { Expr* expr{}; bool isInc{}; };
+struct IncDecStmt       _S { Expr* expr{}; bool isInc{}; CTOR2(IncDecStmt, expr, isInc) };
 struct AssignStmt       _S { ExprList* lhs{}, *rhs{}; TokenType op{}; CTOR3(AssignStmt,lhs,op,rhs) };
 struct SAssignStmt      _S { vector<string> lhs{}; ExprList* rhs{}; CTOR2(SAssignStmt,lhs,rhs) };
 // Expression
@@ -427,11 +428,7 @@ const auto parse(const string & filename) {
         BlockStmt * node{};
         option(OP_LBRACE, [&] {
             node = new BlockStmt;
-            if (t.type != OP_RBRACE) {
-                node->stmtList = parseStmtList(t);
-                eat(OP_RBRACE);
-            } else t = next(f);
-        });
+            alternation(OP_RBRACE, [&] {}, [&] {node->stmtList = parseStmtList(t); eat(OP_RBRACE); });});
         return node;
     };
 #pragma endregion
@@ -538,9 +535,7 @@ const auto parse(const string & filename) {
                 option(OP_VARIADIC, [&] {node->isVariadic = true; });
                 node->name = dynamic_cast<Name*>(mayIdentOrType)->name;
                 node->type = parseType(t);
-            } else {
-                node->type = mayIdentOrType;
-            }
+            } else node->type = mayIdentOrType;
         }
         return node;
     };
@@ -557,7 +552,7 @@ const auto parse(const string & filename) {
                         string name = dynamic_cast<Name*>(node->paramList[k]->type)->name;
                         node->paramList[k]->type = node->paramList[i]->type;
                         node->paramList[k]->name = name;
-                        node->paramList[k]->hasName = true; //It's not necessary
+                        node->paramList[k]->hasName = true; 
                     }
                     rewriteStart = i + 1;
                 }
@@ -598,20 +593,18 @@ const auto parse(const string & filename) {
         Expr* node{};
         eat(OP_LBRACKET);
         nestLev++;
-        if (t.type != OP_RBRACKET) {
+        alternation(OP_RBRACKET, [&] {
+            node = new SliceType;
+            nestLev--;
+            dynamic_cast<SliceType*>(node)->elem = parseType(t);
+        }, [&] {
             node = new ArrayType;
-            alternation(OP_VARIADIC,
-                [&] {dynamic_cast<ArrayType*>(node)->autoLen = true; },
+            alternation(OP_VARIADIC, [&] {dynamic_cast<ArrayType*>(node)->autoLen = true; },
                 [&] {dynamic_cast<ArrayType*>(node)->len = parseExpr(t); });
             nestLev--;
             t = next(f);
             dynamic_cast<ArrayType*>(node)->elem = parseType(t);
-        } else {
-            node = new SliceType;
-            nestLev--;
-            t = next(f);
-            dynamic_cast<SliceType*>(node)->elem = parseType(t);
-        }
+        });
         return node;
     };
     auto parseStructType = [&](Token&t){
@@ -656,21 +649,9 @@ const auto parse(const string & filename) {
     };
     auto parseChanType = [&](Token&t){
         ChanType* node{};
-        if (t.type == KW_chan) {
+        option(KW_chan, [&] {
             node = new ChanType;
-            t = next(f);
-            if (t.type == OP_CHAN) {
-                t = next(f);
-                node->elem = parseType(t);
-            } else {
-                node->elem = parseType(t);
-            }
-        }
-        else if (t.type == OP_CHAN) {
-            node = new ChanType;
-            t = next(f);
-            if (t.type == KW_chan) node->elem = parseType(t);
-        }
+            alternation(OP_CHAN, [&] {node->elem = parseType(t); }, [&] {node->elem = parseType(t); }); });
         return node;
     };
     parseType = [&](Token&t)->Expr* {
@@ -695,23 +676,10 @@ const auto parse(const string & filename) {
             return new SRangeClause{ vector<string>(),parseExpr(t) };
         }
         if (lhs == nullptr) lhs = parseExprList(t);
-
         switch (t.type) {
-        case OP_CHAN: {
-            if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
-            t = next(f);
-            return new SendStmt{ lhs->exprList[0],parseExpr(t) };
-        }
-        case OP_INC:case OP_DEC: {
-            if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
-            auto* stmt = new IncDecStmt;
-            stmt->isInc = t.type == OP_INC;
-            t = next(f);
-            stmt->expr = lhs->exprList[0];
-            return stmt;
-        }
+        case OP_CHAN:           {t = next(f); return new SendStmt{ lhs->exprList[0],parseExpr(t) }; }
+        case OP_INC:case OP_DEC:{auto tmp = t.type; t = next(f); return new IncDecStmt{lhs->exprList[0],tmp==OP_INC}; }
         case OP_SHORTAGN: {
-            if (lhs->exprList.empty()) throw runtime_error("one expr required");
             vector<string> identList;
             for (auto* e : lhs->exprList) {
                 string identName = dynamic_cast<Name*>(dynamic_cast<PrimaryExpr*>(e->lhs->expr)->expr)->name;
@@ -719,8 +687,7 @@ const auto parse(const string & filename) {
             }
             t = next(f);
             Stmt* stmt{};
-            alternation(KW_range,
-                [&] {stmt = new SRangeClause{ move(identList), parseExpr(t) }; },
+            alternation(KW_range,[&] {stmt = new SRangeClause{ move(identList), parseExpr(t) }; },
                 [&] {stmt = new SAssignStmt{ move(identList) ,parseExprList(t) }; });
             return stmt;
         }
@@ -730,21 +697,16 @@ const auto parse(const string & filename) {
             auto op = t.type;
             t = next(f);
             Stmt* stmt{};
-            alternation(KW_range,
-                [&] {stmt = new RangeClause{ lhs,op,parseExpr(t) }; },
+            alternation(KW_range,[&] {stmt = new RangeClause{ lhs,op,parseExpr(t) }; },
                 [&] {stmt = new AssignStmt{ lhs,op,parseExprList(t)}; });
             return stmt;
         }
-        default: {//ExprStmt
-            if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
-            return new ExprStmt{ lhs->exprList[0] };
-        }
+        default: {return new ExprStmt{ lhs->exprList[0] }; }//ExprStmt
         }
     };
     parseIfStmt = [&](Token&t)->IfStmt* {
         const int outLev = nestLev;
         nestLev = -1;
-        eat(KW_if);
         auto * node = new IfStmt;
         if (t.type == OP_LBRACE) throw runtime_error("if statement requires a condition");
         auto* tmp = parseSimpleStmt(nullptr, t);
@@ -755,7 +717,7 @@ const auto parse(const string & filename) {
         
         node->ifBlock = parseBlock(t);
         option(KW_else, [&] {
-            if (t.type == KW_if)            node->elseBlock = parseIfStmt(t);
+            if (t.type == KW_if) {t = next(f); node->elseBlock = parseIfStmt(t);}
             else if (t.type == OP_LBRACE)   node->elseBlock = parseBlock(t);
             else G_ERROR("syntax error", "only else-if or else could place here");
         });
@@ -780,7 +742,6 @@ const auto parse(const string & filename) {
     auto parseSwitchStmt = [&](Token&t) {
         const int outLev = nestLev;
         nestLev = -1;
-        eat(KW_switch);
         auto * node = new SwitchStmt;
         if (t.type != OP_LBRACE) {
             node->init = parseSimpleStmt(nullptr, t);
@@ -802,8 +763,7 @@ const auto parse(const string & filename) {
             auto*tmp = parseSimpleStmt(nullptr, t);
             eat(OP_COLON);
             node->stmtList = parseStmtList(t);
-        }
-        else if (t.type == KW_default) {
+        } else if (t.type == KW_default) {
             node = new SelectCase;
             t = next(f);
             eat(OP_COLON);
@@ -812,7 +772,7 @@ const auto parse(const string & filename) {
         return node;
     };
     auto parseSelectStmt = [&](Token&t) {
-        eat(KW_select);eat(OP_LBRACE);
+        eat(OP_LBRACE);
         auto* node = new SelectStmt;
         repetition(OP_RBRACE,[&] {if (auto*tmp = parseSelectCase(t); tmp != nullptr) node->caseList.push_back(tmp); });
         return node;
@@ -820,7 +780,6 @@ const auto parse(const string & filename) {
     auto parseForStmt = [&](Token&t){
         const int outLev = nestLev;
         nestLev = -1;
-        eat(KW_for);
         auto* node = new ForStmt;
         if (t.type != OP_LBRACE) {
             if (t.type != OP_SEMI) {
@@ -862,10 +821,10 @@ const auto parse(const string & filename) {
         case KW_continue:   t = next(f);  return new ContinueStmt(t.type == TK_ID ? t.lexeme : "");
         case KW_goto:       t = next(f);  return new GotoStmt(t.lexeme);
         case KW_defer:      t = next(f);  return new DeferStmt(parseExpr(t));
-        case KW_if:         return parseIfStmt(t);
-        case KW_switch:     return parseSwitchStmt(t);
-        case KW_select:     return parseSelectStmt(t);
-        case KW_for:        return parseForStmt(t);
+        case KW_if:         t = next(f);  return parseIfStmt(t);
+        case KW_switch:     t = next(f);  return parseSwitchStmt(t);
+        case KW_select:     t = next(f);  return parseSelectStmt(t);
+        case KW_for:        t = next(f);  return parseForStmt(t);
         case OP_LBRACE:     return parseBlock(t);
         case OP_SEMI:       return nullptr;
         case OP_ADD:case OP_SUB:case OP_NOT:case OP_XOR:case OP_MUL:case OP_CHAN:
@@ -874,8 +833,7 @@ const auto parse(const string & filename) {
             // It shall a labeled statement(not part of simple stmt so we handle it here)
             auto* exprList = parseExprList(t);
             Stmt*result{};
-            alternation(OP_COLON, [&] {
-                result = new LabeledStmt(dynamic_cast<Name*>(
+            alternation(OP_COLON, [&] { result = new LabeledStmt(dynamic_cast<Name*>(
                     dynamic_cast<PrimaryExpr*>(exprList->exprList[0]->lhs->expr)->expr)->name,parseStmt(t));
             }, [&] {result = parseSimpleStmt(exprList, t); });
             return result;
@@ -946,11 +904,11 @@ const auto parse(const string & filename) {
                         alternation(KW_type, [&] { tmp = new TypeSwitchExpr(tmp); },
                             [&] {tmp = new TypeAssertExpr(tmp, parseType(t)); });
                         eat(OP_RPAREN);
-                    }
+                    } else G_ERROR("syntax error", "expec identifier or (");
                 } else if (t.type == OP_LBRACKET) {
                     nestLev++;
                     t = next(f);
-                    Expr* start = nullptr;//Ignore start if next token is :(syntax of operand[:xxx])
+                    Expr* start{};//Ignore start if next token is :(syntax of operand[:xxx])
                     if (t.type != OP_COLON) {
                         start = parseExpr(t);
                         if (t.type == OP_RBRACKET) {
@@ -969,9 +927,9 @@ const auto parse(const string & filename) {
                         t = next(f);
                         e->step = parseExpr(t);
                         eat(OP_RBRACKET);
-                    } else if (t.type == OP_RBRACKET) {
-                        t = next(f);
                     }
+                    else if (t.type == OP_RBRACKET) t = next(f);
+                    else G_ERROR("syntax error", "expec : or ]");
                     tmp = e;
                     nestLev--;
                 } else if (t.type == OP_LPAREN) {
