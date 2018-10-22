@@ -16,9 +16,10 @@
 #include <map>
 #define inrange(c,begin,end) (c>=begin && c<=end)
 #define LAMBDA_FUN(X) function<X*(Token&)> parse##X;
-#define REPORT_ERR(PRE,STR) \
+#define G_ERROR(PRE,STR) \
 {cerr<<PRE<<": "<<STR<<" at line "<<line<<", col"<<column<<"\n";\
 exit(EXIT_FAILURE);}
+#define G_ASSERT(EXPR,PRE,MSG) {if((EXPR)) G_ERROR(PRE,MSG);}
 using namespace std;
 //===---------------------------------------------------------------------------------------===//
 // global data
@@ -74,13 +75,13 @@ struct SwitchStmt       _S { Stmt* init{}, *cond{}; vector<SwitchCase*> caseList
 struct SelectCase          {StmtList* stmtList{};};
 struct SelectStmt       _S {vector<SelectCase*> caseList;};
 struct ForStmt          _S { Node* init{}, *cond{}, *post{}; BlockStmt* block{}; };
-struct SRangeClause     _S {vector<string> lhs;Expr* rhs{};};
-struct RangeClause      _S { ExprList* lhs{}; TokenType op; Expr* rhs{}; };
-struct ExprStmt         _S { Expr* expr{}; };
-struct SendStmt         _S { Expr* receiver{}, *sender{}; };
+struct SRangeClause     _S { vector<string> lhs; Expr* rhs{}; SRangeClause(decltype(lhs) a, decltype(rhs) b):lhs(a), rhs(b){} };
+struct RangeClause      _S { ExprList* lhs{}; TokenType op; Expr* rhs{}; RangeClause(decltype(lhs) a, decltype(op) b, decltype(rhs) c) :lhs(a), op(b), rhs(c) {} };
+struct ExprStmt         _S { Expr* expr{}; ExprStmt(Expr* e) :expr(e) {} };
+struct SendStmt         _S { Expr* receiver{}, *sender{}; SendStmt(Expr*r, Expr*s) :receiver(r),sender(s) {} };
 struct IncDecStmt       _S { Expr* expr{}; bool isInc{}; };
-struct AssignStmt       _S { ExprList* lhs{}, *rhs{}; TokenType op{}; };
-struct SAssignStmt      _S { vector<string> lhs{}; ExprList* rhs{}; };
+struct AssignStmt       _S { ExprList* lhs{}, *rhs{}; TokenType op{}; AssignStmt(decltype(lhs) a, decltype(op) b, decltype(rhs) c) :lhs(a), op(b), rhs(c) {} };
+struct SAssignStmt      _S { vector<string> lhs{}; ExprList* rhs{}; SAssignStmt(decltype(lhs) a, decltype(rhs) b):lhs(a), rhs(b){}};
 // Expression
 struct SelectorExpr     _E { Expr* operand{}; string selector; SelectorExpr(Expr*e, string s):operand(e),selector(s) {} };
 struct TypeSwitchExpr   _E { Expr* operand{}; TypeSwitchExpr(Expr*e) :operand(e) {} };
@@ -197,7 +198,7 @@ skip_comment_and_find_next:
                     if (c == '.') {
                         lexeme += consumePeek(c);
                         return Token(OP_VARIADIC, lexeme);
-                    } else REPORT_ERR("lex error", "expect variadic notation(...)");
+                    } else G_ERROR("lex error", "expect variadic notation(...)");
                 } else if (inrange(c, '0', '9')) {
                     type = LIT_FLOAT;
                 } else {
@@ -242,12 +243,10 @@ skip_comment_and_find_next:
                 do lexeme += consumePeek(c); while (inrange(c, '0', '7'));
             else if (anyone(c, 'a', 'b', 'f', 'n', 'r', 't', 'v', '\\', '\'', '"'))
                 lexeme += consumePeek(c);
-            else REPORT_ERR("lex error", "illegal rune");
+            else G_ERROR("lex error", "illegal rune");
         } else lexeme += consumePeek(c);
 
-        if (c != '\'') {
-            REPORT_ERR("lex error", "illegal rune at least in current implementation of g8");
-        }
+        G_ASSERT(c != '\'', "lexer error", "illegal rune");
         lexeme += consumePeek(c);
         return Token(LIT_RUNE, lexeme);
     }
@@ -257,9 +256,7 @@ skip_comment_and_find_next:
             lexeme += consumePeek(c);
             if (c == '\n') line++;
         } while (f.good() && c != '`');
-        if (c != '`') {
-            REPORT_ERR("lex error", "raw string literal does not have a closed symbol \"`\"");
-        }
+        G_ASSERT(c != '`', "lexer error", "raw string literal does not have a closed symbol \"`\"");
         lexeme += consumePeek(c);
         return Token(LIT_STR, lexeme);
     } else if (c == '"') {
@@ -270,15 +267,12 @@ skip_comment_and_find_next:
                 lexeme += consumePeek(c);
             }
         } while (f.good() && (c != '\n' && c != '\r' && c != '"'));
-        if (c != '"') {
-            REPORT_ERR("lex error", "string literal does not have a closed symbol");
-        }
+        G_ASSERT(c != '"', "lexer error", "string literal does not have a closed symbol");
         lexeme += consumePeek(c);
         return Token(LIT_STR, lexeme);
     }
 
-    auto match = [&](initializer_list<tuple<pair<char, TokenType>,
-        initializer_list<pair<string_view, TokenType>>,
+    auto match = [&](initializer_list<tuple<pair<char, TokenType>,initializer_list<pair<string_view, TokenType>>,
         pair<string_view, TokenType>>> big) ->Token {
         for (const auto&[v1, v2, v3] : big) {
             if (c == v1.first) {
@@ -298,7 +292,6 @@ skip_comment_and_find_next:
                 return Token(v1.second, lexeme);
             }
         }
-
         return Token(INVALID, "");
     };
     // operators
@@ -350,7 +343,7 @@ skip_comment_and_find_next:
         {{'%',OP_MOD},      {{"%=",OP_MODAGN}},                                 {}},
     });
     if (result.type != INVALID) { return result; }
-    else REPORT_ERR("lex error", "illegal token in source file");
+    else G_ERROR("lex error", "illegal token in source file");
 }
 
 const auto parse(const string & filename) {
@@ -358,7 +351,7 @@ const auto parse(const string & filename) {
     auto t = next(f);
 
     auto eat = [&](TokenType tk) {
-        if (t.type != tk) REPORT_ERR("syntax ", "expect " + keywords[tk - 1] + "but got" + keywords[t.type - 1]);
+        G_ASSERT(t.type != tk, "syntax ", "expect " + keywords[tk - 1] + "but got " + keywords[t.type - 1]);
         t = next(f);
     };
     // Simulate EBNF behaviors, see g5/docs/ebnf.md for their explanation if you don't know
@@ -486,7 +479,7 @@ const auto parse(const string & filename) {
             if (auto*tmp = parseType(t); tmp != nullptr)    node->type.push_back(tmp);
             else                                           node->type.push_back(nullptr);
             alternation(OP_AGN, [&] {node->exprList.push_back(parseExprList(t)); }, [&] {node->exprList.push_back(nullptr); });
-            if (t.type != OP_SEMI) REPORT_ERR("syntax error", "expect an explicit semicolon");
+            if (t.type != OP_SEMI) G_ERROR("syntax error", "expect an explicit semicolon");
         });
         return node;
     };
@@ -514,8 +507,7 @@ const auto parse(const string & filename) {
         if (auto*tmp = parseIdentList(t); tmp != nullptr) {
             node = new VarSpec;
             node->identList = tmp;
-            alternation(OP_AGN,
-                [&] {node->exprList = parseExprList(t); },
+            alternation(OP_AGN, [&] {node->exprList = parseExprList(t); },
                 [&] {node->type = parseType(t); option(OP_AGN, [&] {node->exprList = parseExprList(t); }); }
             );
         }
@@ -703,9 +695,7 @@ const auto parse(const string & filename) {
     auto parseSimpleStmt = [&](ExprList* lhs, Token&t)->Stmt* {
         if (t.type == KW_range) {    //special case for ForStmt
             t = next(f);
-            auto*stmt = new SRangeClause;
-            stmt->rhs = parseExpr(t);
-            return stmt;
+            return new SRangeClause{ vector<string>(),parseExpr(t) };
         }
         if (lhs == nullptr) lhs = parseExprList(t);
 
@@ -713,10 +703,7 @@ const auto parse(const string & filename) {
         case OP_CHAN: {
             if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
             t = next(f);
-            auto* stmt = new SendStmt;
-            stmt->receiver = lhs->exprList[0];
-            stmt->sender = parseExpr(t);
-            return stmt;
+            return new SendStmt{ lhs->exprList[0],parseExpr(t) };
         }
         case OP_INC:case OP_DEC: {
             if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
@@ -728,54 +715,32 @@ const auto parse(const string & filename) {
         }
         case OP_SHORTAGN: {
             if (lhs->exprList.empty()) throw runtime_error("one expr required");
-
             vector<string> identList;
             for (auto* e : lhs->exprList) {
                 string identName = dynamic_cast<Name*>(dynamic_cast<PrimaryExpr*>(e->lhs->expr)->expr)->name;
                 identList.push_back(identName);
             }
             t = next(f);
-            if (t.type == KW_range) {
-                t = next(f);
-                auto* stmt = new SRangeClause;
-                stmt->lhs = move(identList);
-                stmt->rhs = parseExpr(t);
-                return stmt;
-            }
-            else {
-                auto*stmt = new SAssignStmt;
-                stmt->lhs = move(identList);
-                stmt->rhs = parseExprList(t);
-                return stmt;
-            }
+            Stmt* stmt{};
+            alternation(KW_range,
+                [&] {stmt = new SRangeClause{ move(identList), parseExpr(t) }; },
+                [&] {stmt = new SAssignStmt{ move(identList) ,parseExprList(t) }; });
+            return stmt;
         }
         case OP_ADDAGN:case OP_SUBAGN:case OP_ORAGN:case OP_XORAGN:case OP_MULAGN:case OP_DIVAGN:
         case OP_MODAGN:case OP_LSFTAGN:case OP_RSFTAGN:case OP_ANDAGN:case OP_ANDXORAGN:case OP_AGN: {
             if (lhs->exprList.empty()) throw runtime_error("one expr required");
             auto op = t.type;
             t = next(f);
-            if (t.type == KW_range) {
-                t = next(f);
-                auto* stmt = new RangeClause;
-                stmt->lhs = lhs;
-                stmt->op = op;
-                stmt->rhs = parseExpr(t);
-                return stmt;
-            }
-            else {
-                auto* stmt = new AssignStmt;
-                stmt->lhs = lhs;
-                stmt->op = op;
-                stmt->rhs = parseExprList(t);
-                return stmt;
-            }
-
+            Stmt* stmt{};
+            alternation(KW_range,
+                [&] {stmt = new RangeClause{ lhs,op,parseExpr(t) }; },
+                [&] {stmt = new AssignStmt{ lhs,op,parseExprList(t)}; });
+            return stmt;
         }
         default: {//ExprStmt
             if (lhs->exprList.size() != 1) throw runtime_error("one expr required");
-            auto* stmt = new ExprStmt;
-            stmt->expr = lhs->exprList[0];
-            return stmt;
+            return new ExprStmt{ lhs->exprList[0] };
         }
         }
     };
@@ -795,7 +760,7 @@ const auto parse(const string & filename) {
         option(KW_else, [&] {
             if (t.type == KW_if)            node->elseBlock = parseIfStmt(t);
             else if (t.type == OP_LBRACE)   node->elseBlock = parseBlock(t);
-            else REPORT_ERR("syntax error", "only else-if or else could place here");
+            else G_ERROR("syntax error", "only else-if or else could place here");
         });
         return node;
     };
@@ -876,7 +841,7 @@ const auto parse(const string & filename) {
                     eat(OP_SEMI);
                     if (t.type != OP_LBRACE)node->post = parseSimpleStmt(nullptr, t);
                     break;
-                default:REPORT_ERR("syntax error", "expect {/;/range/:=/=");
+                default:G_ERROR("syntax error", "expect {/;/range/:=/=");
                 }
             } else {  // for ;cond;post{}
                 t = next(f);
@@ -1024,10 +989,10 @@ const auto parse(const string & filename) {
                     eat(OP_RPAREN);
                     tmp = e;
                 }else if (t.type == OP_LBRACE) {
-                    // only operand has literal value, otherwise, treats it as a block
+                    // Only operand has literal value, otherwise, treats it as a block
+                    // It's somewhat curious since official implementation treats literal type and literal value as separate parts
                     if (anyone(typeid(*tmp), typeid(ArrayType), typeid(SliceType), typeid(StructType), typeid(MapType))
                         || ((anyone(typeid(*tmp), typeid(Name), typeid(SelectorExpr))) && nestLev >= 0)) {
-                        // it's somewhat curious since official implementation treats literal type and literal value as separate parts
                         tmp = new CompositeLit{ tmp,parseLitValue(t) };
                     } else break;
                 } else break;
@@ -1071,7 +1036,7 @@ const auto parse(const string & filename) {
         case KW_var:    node->varDecl.push_back(parseVarDecl(t));           break;
         case KW_func:   node->funcDecl.push_back(parseFuncDecl(false, t));  break;
         case OP_SEMI:   t = next(f);                                        break;
-        default:        REPORT_ERR("syntax error","unknown top level declaration"); 
+        default:        G_ERROR("syntax error","unknown top level declaration"); 
         }
     }
     return node;
@@ -1093,7 +1058,7 @@ void printLex(const string & filename) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 2 || argv[1] == nullptr) REPORT_ERR("fatal error", "specify your go source file\n");
+    if (argc < 2 || argv[1] == nullptr) G_ERROR("fatal error", "specify your go source file\n");
     //printLex(argv[1]);
     const CompilationUnit* ast = parse(argv[1]);
     cout << "parsing passed\n";
