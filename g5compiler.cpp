@@ -1123,23 +1123,16 @@ const auto parse(const string & filename) {
         return node;
     };
     auto parseKey = [&](Token&t)->Expr* {
-        if (t.type == TK_ID)                                    return parseName(false, t);
-        else if (auto*tmp = parseLitValue(t); tmp != nullptr)   return tmp;
-        else if (auto*tmp = parseExpr(t); tmp != nullptr)       return tmp;
-        return nullptr;
+        if (t.type == OP_LBRACE) return parseLitValue(t);
+        else return parseExpr(t);
     };
     auto parseKeyedElement = [&](Token&t){
-        KeyedElement*node{};
-        if (auto*tmp = parseKey(t); tmp != nullptr) {
-            node = new KeyedElement;
-            node->elem = tmp;
-            if (t.type == OP_COLON) {
-                node->key = tmp;
-                t = next(f);
-                if (auto*tmp1 = parseExpr(t); tmp1 != nullptr)          node->elem = tmp1;
-                else if (auto*tmp1 = parseLitValue(t); tmp1 != nullptr) node->elem = tmp1;
-                else node->elem = nullptr;
-            }
+        auto*node = new KeyedElement;
+        node->elem = parseKey(t);
+        if (t.type == OP_COLON) {
+            t = next(f);
+            node->key = node->elem;
+            node->elem = parseKey(t);
         }
         return node;
     };
