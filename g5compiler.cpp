@@ -164,7 +164,6 @@ skip_comment_and_find_next:
         shouldEof = 1;
         return Token(OP_SEMI, ";");
     }
-
     string lexeme;
     // identifier
     if (inrange(c, 'a', 'z') || inrange(c, 'A', 'Z') || c == '_') {
@@ -176,7 +175,6 @@ skip_comment_and_find_next:
             if (keywords[i] == lexeme)  return Token(static_cast<TokenType>(i + 1), lexeme);
         return Token(TK_ID, lexeme);
     }
-
     // decimal 
     if (c >= '0'&&c <= '9' || c == '.') {
         if (c == '0') {
@@ -261,7 +259,6 @@ skip_comment_and_find_next:
         lexeme += consumePeek(c);
         return Token(LIT_RUNE, lexeme);
     }
-
     // string literal
     if (c == '`') {
         do {
@@ -312,7 +309,6 @@ skip_comment_and_find_next:
 
         return Token(INVALID, "");
     };
-
     // operators
     if(c=='/') { // special case for /  /= // /*...*/
         char pending = consumePeek(c);
@@ -361,7 +357,6 @@ skip_comment_and_find_next:
         {{';',OP_SEMI},     {},                                                 {}},
         {{'%',OP_MOD},      {{"%=",OP_MODAGN}},                                 {}},
     });
-
     if (result.type != INVALID) { return result; }
     else REPORT_ERR("lex error", "illegal token in source file");
 }
@@ -370,11 +365,20 @@ const auto parse(const string & filename) {
     fstream f(filename, ios::binary | ios::in);
     auto t = next(f);
 
-    auto eat = [&](TokenType tk, const string&msg) {
-        if (t.type != tk) throw runtime_error(msg);
+    // Simulate EBNF behaviors, see docs/ebnf.md for their explanation if you don't know
+    // They are merely used in the case of simple parsing tasks, while keeping traditional control
+    // flows for those complicated tasks since callback is not enough clear to read for human logic
+
+    auto eat = [&](TokenType tk) {
+        if (t.type != tk) throw runtime_error("expect " + keywords[tk - 1] + "but got" + keywords[t.type - 1]);
         t = next(f);
     };
-    auto eatOptionalSemi = [&]() { if (t.type == OP_SEMI) t = next(f); };
+    auto option = [&](TokenType specific,auto then) { 
+        if (t.type == specific) { t = next(f); then(); }
+    };
+    auto alternation = [&](TokenType specific, auto then, auto otherwise) {
+        if (t.type == specific) { t = next(f); then(); } else { otherwise(); }
+    };
 
     LAMBDA_FUN(LitValue);LAMBDA_FUN(Expr); LAMBDA_FUN(UnaryExpr);
     LAMBDA_FUN(PrimaryExpr); LAMBDA_FUN(Stmt); LAMBDA_FUN(IfStmt);
@@ -399,16 +403,15 @@ const auto parse(const string & filename) {
     };
     auto parseIdentList = [&](Token&t) {
         IdentList* node{};
-        if (t.type == TK_ID) {
+        option(TK_ID, [&] {
             node = new  IdentList;
             node->identList.emplace_back(t.lexeme);
-            t = next(f);
             while (t.type == OP_COMMA) {
                 t = next(f);
                 node->identList.emplace_back(t.lexeme);
                 t = next(f);
             }
-        }
+        });
         return node;
     };
     auto parseExprList = [&](Token&t) {
@@ -429,47 +432,43 @@ const auto parse(const string & filename) {
         while ((tmp = parseStmt(t))) {
             if (node == nullptr) node = new StmtList;
             node->stmtList.push_back(tmp);
-            eatOptionalSemi();
+            option(OP_SEMI,[]{});
         }
         return node;
     };
     auto parseBlock = [&](Token&t){
         BlockStmt * node{};
-        if (t.type == OP_LBRACE) {
+        option(OP_LBRACE, [&] {
             node = new BlockStmt;
-            t = next(f);
             if (t.type != OP_RBRACE) {
                 node->stmtList = parseStmtList(t);
-                eat(OP_RBRACE, "expect } around code block");
+                eat(OP_RBRACE);
             } else t = next(f);
-        }
+        });
         return node;
     };
 #pragma endregion
 #pragma region Declaration
     auto parseImportDecl = [&](Token&t) {
         auto node = new ImportDecl;
-        eat(KW_import, "it should be import declaration");
-        if (t.type == OP_LPAREN) {
-            t = next(f);
+        eat(KW_import);
+        alternation(OP_LPAREN, [&] {
             do {
                 string importName, alias;
-                if (t.type == OP_DOT || t.type == TK_ID) {
+                if (anyone(t.type, OP_DOT, TK_ID)) {
                     alias = t.lexeme;
                     t = next(f);
                     importName = t.lexeme;
-                } else {
-                    importName = t.lexeme;
-                }
+                } else importName = t.lexeme;
                 importName = importName.substr(1, importName.length() - 2);
                 node->imports[importName] = alias;
                 t = next(f);
-                eatOptionalSemi();
+                option(OP_SEMI, [] {});
             } while (t.type != OP_RPAREN);
-            eat(OP_RPAREN, "expect )");
-        } else {
+            eat(OP_RPAREN);
+        }, [&] {
             string importName, alias;
-            if (t.type == OP_DOT || t.type == TK_ID) {
+            if (anyone(t.type, OP_DOT, TK_ID)) {
                 alias = t.lexeme;
                 t = next(f);
                 importName = t.lexeme;
@@ -480,14 +479,13 @@ const auto parse(const string & filename) {
             }
             importName = importName.substr(1, importName.length() - 2);
             node->imports[importName] = alias;
-        }
+        });
         return node;
     };
     auto parseConstDecl = [&](Token&t){
         auto * node = new ConstDecl;
-        eat(KW_const, "it should be const declaration");
-        if (t.type == OP_LPAREN) {
-            t = next(f);
+        eat(KW_const);
+        alternation(OP_LPAREN, [&] {
             do {
                 node->identList.push_back(parseIdentList(t));
                 if (auto*tmp = parseType(t); tmp != nullptr) {
@@ -501,10 +499,10 @@ const auto parse(const string & filename) {
                 } else {
                     node->exprList.push_back(nullptr);
                 }
-                eatOptionalSemi();
+                option(OP_SEMI, [] {});
             } while (t.type != OP_RPAREN);
-            eat(OP_RPAREN, "eat right parenthesis");
-        } else {
+            eat(OP_RPAREN);
+        }, [&] {
             node->identList.push_back(parseIdentList(t));
             if (auto*tmp = parseType(t); tmp != nullptr) {
                 node->type.push_back(tmp);
@@ -517,9 +515,8 @@ const auto parse(const string & filename) {
             } else {
                 node->exprList.push_back(nullptr);
             }
-            if (t.type != OP_SEMI) throw runtime_error("expect an explicit semicolon");
-        }
-
+            if (t.type != OP_SEMI) REPORT_ERR("syntax error", "expect an explicit semicolon");
+        });
         return node;
     };
     auto parseTypeSpec = [&](Token&t) {
@@ -528,26 +525,21 @@ const auto parse(const string & filename) {
             node = new TypeSpec;
             node->ident = t.lexeme;
             t = next(f);
-            if (t.type == OP_AGN) {
-                t = next(f);
-            }
+            option(OP_AGN, [] {});
             node->type = parseType(t);
         }
         return node;
     };
     auto parseTypeDecl = [&](Token&t) {
         auto * node = new TypeDecl;
-        eat(KW_type, "it should be type declaration");
-        if (t.type == OP_LPAREN) {
-            t = next(f);
+        eat(KW_type);
+        alternation(OP_LPAREN, [&] {
             do {
                 node->typeSpec.push_back(parseTypeSpec(t));
-                eatOptionalSemi();
+                option(OP_SEMI, [] {});
             } while (t.type != OP_RPAREN);
-            eat(OP_RPAREN, "expect )");
-        } else {
-            node->typeSpec.push_back(parseTypeSpec(t));
-        }
+            eat(OP_RPAREN);
+        }, [&] {node->typeSpec.push_back(parseTypeSpec(t)); });
         return node;
     };
     auto parseVarSpec = [&](Token&t){
@@ -555,28 +547,23 @@ const auto parse(const string & filename) {
         if (auto*tmp = parseIdentList(t); tmp != nullptr) {
             node = new VarSpec;
             node->identList = tmp;
-            if (t.type == OP_AGN) {
-                t = next(f);
-                node->exprList = parseExprList(t);
-            } else {
-                node->type = parseType(t);
-                if (t.type == OP_AGN) {
-                    t = next(f);
-                    node->exprList = parseExprList(t);
-                }
-            }
+            alternation(OP_AGN,
+                [&] {node->exprList = parseExprList(t); },
+                [&] {node->type = parseType(t); option(OP_AGN, [&] {node->exprList = parseExprList(t); }); }
+            );
         }
         return node;
     };
     auto parseVarDecl = [&](Token&t) {
         auto * node = new VarDecl;
-        eat(KW_var, "it should be var declaration");
+        eat(KW_var);
         if (t.type == OP_LPAREN) {
-            do {
+            t = next(f);
+            while (t.type != OP_RPAREN) {
                 node->varSpec.push_back(parseVarSpec(t));
-                t = next(f);
-            } while (t.type != OP_RPAREN);
-            eat(OP_RPAREN, "expect )");
+                option(OP_SEMI, [] {});
+            }
+            eat(OP_RPAREN);
         } else {
             node->varSpec.push_back(parseVarSpec(t));
         }
@@ -651,7 +638,7 @@ const auto parse(const string & filename) {
     };
     auto parseFuncDecl = [&](bool anonymous, Token&t){
         auto * node = new FuncDecl;
-        eat(KW_func, "it should be function declaration");
+        eat(KW_func);
         if (!anonymous) {
             if (t.type == OP_LPAREN) node->receiver = parseParam(t);
             node->funcName = t.lexeme;
@@ -667,7 +654,7 @@ const auto parse(const string & filename) {
 #pragma region Type
     auto parseArrayOrSliceType = [&](Token&t) {
         Expr* node{};
-        eat(OP_LBRACKET, "array/slice type requires [ to denote that");
+        eat(OP_LBRACKET);
         nestLev++;
         if (t.type != OP_RBRACKET) {
             node = new ArrayType;
@@ -690,8 +677,8 @@ const auto parse(const string & filename) {
     };
     auto parseStructType = [&](Token&t){
         auto * node = new  StructType;
-        eat(KW_struct, "structure type requires struct keyword");
-        eat(OP_LBRACE, "a { is required after struct");
+        eat(KW_struct);option(OP_SEMI,[]{});
+        eat(OP_LBRACE);
         do {
             tuple<Expr*, Expr*, string, bool> field;// <IdentList/Name,Type,Tag,isEmbeded>
             if (auto * tmp = parseIdentList(t); tmp != nullptr) {
@@ -708,32 +695,31 @@ const auto parse(const string & filename) {
             }
             if (t.type == LIT_STR) get<2>(field) = t.lexeme;  
             node->fields.push_back(field);
-            eatOptionalSemi();
+            option(OP_SEMI,[]{});
         } while (t.type != OP_RBRACE);
-        eat(OP_RBRACE, "expect }");
-        eatOptionalSemi();
+        eat(OP_RBRACE);
+        option(OP_SEMI,[]{});
         return node;
     };
     auto parseInterfaceType = [&](Token&t){
         auto * node = new InterfaceType;
-        eat(KW_interface, "interface type requires keyword interface");
-        eat(OP_LBRACE, "{ is required after interface");
+        eat(KW_interface);
+        eat(OP_LBRACE);
         while (t.type != OP_RBRACE) {
             if (auto* tmp = parseName(true, t); tmp != nullptr && tmp->name.find('.') == string::npos)
                 node->method.emplace_back(tmp, parseSignature(t));
             else node->method.emplace_back(tmp, nullptr);
-            
-            eatOptionalSemi();
+            option(OP_SEMI,[]{});
         }
         t = next(f);
         return node;
     };
     auto parseMapType = [&](Token&t){
         auto * node = new MapType;
-        eat(KW_map, "map type requires keyword map to denote that");
-        eat(OP_LBRACKET, "[ is required after map");
+        eat(KW_map);
+        eat(OP_LBRACKET);
         node->type = parseType(t);
-        eat(OP_RBRACKET, "] is required after map[Key");
+        eat(OP_RBRACKET);
         node->elem = parseType(t);
         return node;
     };
@@ -854,7 +840,7 @@ const auto parse(const string & filename) {
     parseIfStmt = [&](Token&t)->IfStmt* {
         const int outLev = nestLev;
         nestLev = -1;
-        eat(KW_if, "expect keyword if");
+        eat(KW_if);
         auto * node = new IfStmt;
         if (t.type == OP_LBRACE) throw runtime_error("if statement requires a condition");
         auto* tmp = parseSimpleStmt(nullptr, t);
@@ -881,13 +867,13 @@ const auto parse(const string & filename) {
             node = new SwitchCase;
             t = next(f);
             node->exprList = parseExprList(t);
-            eat(OP_COLON, "statements in each case requires colon to separate");
+            eat(OP_COLON);
             node->stmtList = parseStmtList(t);
         }
         else if (t.type == KW_default) {
             node = new SwitchCase;
             t = next(f);
-            eat(OP_COLON, "expect : after default label");
+            eat(OP_COLON);
             node->stmtList = parseStmtList(t);
         }
         return node;
@@ -895,14 +881,14 @@ const auto parse(const string & filename) {
     auto parseSwitchStmt = [&](Token&t) {
         const int outLev = nestLev;
         nestLev = -1;
-        eat(KW_switch, "expect keyword switch");
+        eat(KW_switch);
         auto * node = new SwitchStmt;
         if (t.type != OP_LBRACE) {
             node->init = parseSimpleStmt(nullptr, t);
             if (t.type == OP_SEMI) t = next(f);
             if (t.type != OP_LBRACE) node->cond = parseSimpleStmt(nullptr, t);
         }
-        eat(OP_LBRACE, "expec { after switch header");
+        eat(OP_LBRACE);
         do {
             if (auto*tmp = parseSwitchCase(t); tmp != nullptr) node->caseList.push_back(tmp);
         } while (t.type != OP_RBRACE);
@@ -916,34 +902,31 @@ const auto parse(const string & filename) {
             node = new SelectCase;
             t = next(f);
             auto*tmp = parseSimpleStmt(nullptr, t);
-            eat(OP_COLON, "statements in each case requires colon to separate");
+            eat(OP_COLON);
             node->stmtList = parseStmtList(t);
         }
         else if (t.type == KW_default) {
             node = new SelectCase;
             t = next(f);
-            eat(OP_COLON, "expect : after default label");
+            eat(OP_COLON);
             node->stmtList = parseStmtList(t);
         }
         return node;
     };
     auto parseSelectStmt = [&](Token&t) {
-        const int outLev = nestLev;
-        nestLev = -1;
-        eat(KW_select, "expect keyword select");
-        eat(OP_LBRACE, "expect { after select keyword");
+        eat(KW_select);
+        eat(OP_LBRACE);
         auto* node = new SelectStmt;
         do {
             if (auto*tmp = parseSelectCase(t); tmp != nullptr) node->caseList.push_back(tmp);
         } while (t.type != OP_RBRACE);
         t = next(f);
-        nestLev = outLev;
         return node;
     };
     auto parseForStmt = [&](Token&t){
         const int outLev = nestLev;
         nestLev = -1;
-        eat(KW_for, "expect keyword for");
+        eat(KW_for);
         auto* node = new ForStmt;
         if (t.type != OP_LBRACE) {
             if (t.type != OP_SEMI) {
@@ -955,9 +938,9 @@ const auto parse(const string & filename) {
                     break;
                 case OP_SEMI:
                     node->init = tmp;
-                    eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
+                    eat(OP_SEMI);
                     node->cond = parseExpr(t);
-                    eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
+                    eat(OP_SEMI);
                     if (t.type != OP_LBRACE)node->post = parseSimpleStmt(nullptr, t);
                     break;
                 default:throw runtime_error("expect {/;/range/:=/=");
@@ -967,7 +950,7 @@ const auto parse(const string & filename) {
                 t = next(f);
                 node->init = nullptr;
                 node->cond = parseExpr(t);
-                eat(OP_SEMI, "for syntax are as follows: [init];[cond];[post]{...}");
+                eat(OP_SEMI);
                 if (t.type != OP_LBRACE) node->post = parseSimpleStmt(nullptr, t);
             }
         }
@@ -997,8 +980,8 @@ const auto parse(const string & filename) {
         case LIT_STR:case LIT_INT:case LIT_IMG:case LIT_FLOAT:case LIT_RUNE:
         case KW_func:case KW_struct:case KW_map:case OP_LBRACKET:case TK_ID: case OP_LPAREN:{
             auto* exprList = parseExprList(t);
+            //it shall a labeled statement(not part of simple stmt so we handle it here)
             if (t.type == OP_COLON) { 
-                //it shall a labeled statement(not part of simple stmt so we handle it here)
                 t = next(f);
                 return new LabeledStmt(
                     dynamic_cast<Name*>(dynamic_cast<PrimaryExpr*>(exprList->exprList[0]->lhs->expr)->expr)->name,
@@ -1048,7 +1031,7 @@ const auto parse(const string & filename) {
             nestLev++; 
             auto* e = parseExpr(t); 
             nestLev--; 
-            eat(OP_RPAREN, "expect )"); 
+            eat(OP_RPAREN); 
             return e;
         } else if (anyone(t.type, LIT_INT, LIT_FLOAT, LIT_IMG, LIT_RUNE, LIT_STR)) {
             auto*tmp = new BasicLit(t.type, t.lexeme); t = next(f); return tmp;
@@ -1077,7 +1060,7 @@ const auto parse(const string & filename) {
                         } else {
                             tmp = new TypeAssertExpr(tmp, parseType(t));
                         }
-                        eat(OP_RPAREN, "expect )");
+                        eat(OP_RPAREN);
                     }
                 } else if (t.type == OP_LBRACKET) {
                     nestLev++;
@@ -1095,12 +1078,12 @@ const auto parse(const string & filename) {
                     auto* e = new SliceExpr;
                     e->operand = tmp;
                     e->begin = start;
-                    eat(OP_COLON, "expect : in slice expression");
+                    eat(OP_COLON);
                     e->end = parseExpr(t);//may nullptr
                     if (t.type == OP_COLON) {
                         t = next(f);
                         e->step = parseExpr(t);
-                        eat(OP_RBRACKET, "expect ] at the end of slice expression");
+                        eat(OP_RBRACKET);
                     } else if (t.type == OP_RBRACKET) {
                         t = next(f);
                     }
@@ -1119,7 +1102,7 @@ const auto parse(const string & filename) {
                         t = next(f);
                     }
                     nestLev--;
-                    eat(OP_RPAREN, "() must match in call expr");
+                    eat(OP_RPAREN);
                     tmp = e;
                 }else if (t.type == OP_LBRACE) {
                     // only operand has literal value, otherwise, treats it as a block
@@ -1168,7 +1151,7 @@ const auto parse(const string & filename) {
                 if (t.type == OP_RBRACE) break; // it's necessary since both {a,b} or {a,b,} are legal form
                 node->keyedElement.push_back(parseKeyedElement(t));
             } while (t.type != OP_RBRACE);
-            eat(OP_RBRACE, "brace {} must match");
+            eat(OP_RBRACE);
             nestLev--;
         }
         return node;
@@ -1176,10 +1159,10 @@ const auto parse(const string & filename) {
 #pragma endregion
     // parsing startup
     auto * node = new CompilationUnit;
-    eat(KW_package, "a go source file must start with package declaration");
+    eat(KW_package);
     node->package = t.lexeme;
-    eat(TK_ID, "name required at the package declaration");
-    eat(OP_SEMI, "expect ; at the end of package declaration");
+    eat(TK_ID);
+    eat(OP_SEMI);
     while (t.type != TK_EOF) {
         switch (t.type) {
         case KW_import: node->importDecl.push_back(parseImportDecl(t));     break;

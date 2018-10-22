@@ -13,7 +13,7 @@ set(SOURCE_FILES g5compiler.cpp)
 add_executable(g5 ${SOURCE_FILES})
 
 file(GLOB TEST1 ${PROJECT_SOURCE_DIR}/test/adhoc/*.go)
-file(GLOB TEST2 ${PROJECT_SOURCE_DIR}/test/officialimpl/*.go)
+file(GLOB TEST2 ${PROJECT_SOURCE_DIR}/test/official/*.go)
 
 enable_testing()
 foreach(s ${TEST1})
@@ -23,5 +23,5 @@ endforeach()
 
 foreach(s ${TEST2})
     get_filename_component(curated ${s} NAME_WE)
-    add_test(NAME officialimpl_${curated} COMMAND g5  ${s})
+    add_test(NAME official_${curated} COMMAND g5  ${s})
 endforeach()

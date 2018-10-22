@@ -1,5 +1,6 @@
 package main
 
+const mProfCycleWrap = uint32(len(memRecord{}.future)) * (2 << 24)
 const endOfText rune = -1
 // The result of Scan is one of these tokens or a Unicode character.
 const (

@@ -1,4 +1,23 @@
 package main
+
+var (
+	mbuckets  *bucket // memory profile buckets
+	bbuckets  *bucket // blocking profile buckets
+	xbuckets  *bucket // mutex profile buckets
+	buckhash  *[179999]*bucket
+	bucketmem uintptr
+
+	mProf struct {
+		// All fields in mProf are protected by proflock.
+
+		// cycle is the global heap profile cycle. This wraps
+		// at mProfCycleWrap.
+		cycle uint32
+		// flushed indicates that future[cycle] in all buckets
+		// has been flushed to the active profile.
+		flushed bool
+	}
+)
 var blockJump = [...]struct {
 	asm, invasm obj.As
 }{
