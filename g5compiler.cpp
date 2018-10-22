@@ -50,6 +50,9 @@ enum TokenType : signed int {
 #define _S :public Stmt
 #define _E :public Expr
 #define _N :public Node
+#define CTOR1(NAME,FD1)         NAME(decltype(FD1) FD1):FD1(FD1){}
+#define CTOR2(NAME,FD1,FD2)     NAME(decltype(FD1) FD1, decltype(FD2) FD2):FD1(FD1),FD2(FD2){}
+#define CTOR3(NAME,FD1,FD2,FD3) NAME(decltype(FD1) FD1, decltype(FD2) FD2, decltype(FD3) FD3):FD1(FD1),FD2(FD2),FD3(FD3){}
 struct UnaryExpr;
 struct Node                { virtual ~Node() = default; };
 struct Expr             _N { UnaryExpr* lhs{}; TokenType op{}; Expr* rhs{}; };
@@ -61,46 +64,46 @@ struct ExprList         _E { vector<Expr*> exprList; };
 struct StmtList         _E { vector<Stmt*> stmtList; };
 // Statement
 struct BlockStmt        _S { StmtList* stmtList{}; };
-struct GoStmt           _S { Expr* expr{}; GoStmt(Expr* expr) :expr(expr) {} };
-struct ReturnStmt       _S { ExprList* exprList{}; ReturnStmt(ExprList* el) :exprList(el) {} };
-struct BreakStmt        _S { string label; BreakStmt(const string&s) :label(s) {} };
-struct DeferStmt        _S { Expr* expr{}; DeferStmt(Expr* expr) :expr(expr) {} };
-struct ContinueStmt     _S { string label; ContinueStmt(const string&s) :label(s) {} };
-struct GotoStmt         _S { string label; GotoStmt(const string&s) :label(s) {} };
+struct GoStmt           _S { Expr* expr{}; CTOR1(GoStmt, expr) };
+struct ReturnStmt       _S { ExprList* exprList{}; CTOR1(ReturnStmt,exprList) };
+struct BreakStmt        _S { string label; CTOR1(BreakStmt, label) };
+struct DeferStmt        _S { Expr* expr{}; CTOR1(DeferStmt, expr) };
+struct ContinueStmt     _S { string label; CTOR1(ContinueStmt, label) };
+struct GotoStmt         _S { string label; CTOR1(GotoStmt, label) };
 struct FallthroughStmt  _S {};
-struct LabeledStmt      _S { string label; Stmt* stmt{}; LabeledStmt(const string&s, Stmt*st) :label(s), stmt(st) {} };
+struct LabeledStmt      _S { string label; Stmt* stmt{}; CTOR2(LabeledStmt,label,stmt)};
 struct IfStmt           _S { Stmt* init{}, *ifBlock{}, *elseBlock{}; Expr* cond{}; };
 struct SwitchCase          { ExprList* exprList{}; StmtList* stmtList{}; };
 struct SwitchStmt       _S { Stmt* init{}, *cond{}; vector<SwitchCase*> caseList{}; };
 struct SelectCase          {StmtList* stmtList{};};
 struct SelectStmt       _S {vector<SelectCase*> caseList;};
 struct ForStmt          _S { Node* init{}, *cond{}, *post{}; BlockStmt* block{}; };
-struct SRangeClause     _S { vector<string> lhs; Expr* rhs{}; SRangeClause(decltype(lhs) a, decltype(rhs) b):lhs(a), rhs(b){} };
-struct RangeClause      _S { ExprList* lhs{}; TokenType op; Expr* rhs{}; RangeClause(decltype(lhs) a, decltype(op) b, decltype(rhs) c) :lhs(a), op(b), rhs(c) {} };
-struct ExprStmt         _S { Expr* expr{}; ExprStmt(Expr* e) :expr(e) {} };
-struct SendStmt         _S { Expr* receiver{}, *sender{}; SendStmt(Expr*r, Expr*s) :receiver(r),sender(s) {} };
+struct SRangeClause     _S { vector<string> lhs; Expr* rhs{}; CTOR2(SRangeClause, lhs, rhs) };
+struct RangeClause      _S { ExprList* lhs{}; TokenType op; Expr* rhs{}; CTOR3(RangeClause,lhs,op,rhs)};
+struct ExprStmt         _S { Expr* expr{}; CTOR1(ExprStmt,expr) };
+struct SendStmt         _S { Expr* receiver{}, *sender{}; CTOR2(SendStmt, receiver, sender) };
 struct IncDecStmt       _S { Expr* expr{}; bool isInc{}; };
-struct AssignStmt       _S { ExprList* lhs{}, *rhs{}; TokenType op{}; AssignStmt(decltype(lhs) a, decltype(op) b, decltype(rhs) c) :lhs(a), op(b), rhs(c) {} };
-struct SAssignStmt      _S { vector<string> lhs{}; ExprList* rhs{}; SAssignStmt(decltype(lhs) a, decltype(rhs) b):lhs(a), rhs(b){}};
+struct AssignStmt       _S { ExprList* lhs{}, *rhs{}; TokenType op{}; CTOR3(AssignStmt,lhs,op,rhs) };
+struct SAssignStmt      _S { vector<string> lhs{}; ExprList* rhs{}; CTOR2(SAssignStmt,lhs,rhs) };
 // Expression
-struct SelectorExpr     _E { Expr* operand{}; string selector; SelectorExpr(Expr*e, string s):operand(e),selector(s) {} };
-struct TypeSwitchExpr   _E { Expr* operand{}; TypeSwitchExpr(Expr*e) :operand(e) {} };
-struct TypeAssertExpr   _E { Expr* operand{}, *type{}; TypeAssertExpr(Expr*e, Expr *t) :operand(e), type(t) {} };
-struct IndexExpr        _E { Expr* operand{}, *index{}; IndexExpr(Expr*e, Expr*i) :operand(e), index(i) {} };
+struct SelectorExpr     _E { Expr* operand{}; string selector; CTOR2(SelectorExpr, operand, selector) };
+struct TypeSwitchExpr   _E { Expr* operand{}; CTOR1(TypeSwitchExpr,operand) };
+struct TypeAssertExpr   _E { Expr* operand{}, *type{}; CTOR2(TypeAssertExpr,operand,type) };
+struct IndexExpr        _E { Expr* operand{}, *index{}; CTOR2(IndexExpr, operand, index) };
 struct SliceExpr        _E { Expr* operand{}, *begin{}, *end{}, *step{}; };
 struct CallExpr         _E { Expr* operand{}, *type{}; ExprList* arguments{}; bool isVariadic{}; };
 struct KeyedElement        { Expr*key{}, *elem{}; };
 struct LitValue         _E { vector<KeyedElement*> keyedElement; };
-struct BasicLit         _E { TokenType type{}; string value; BasicLit(TokenType t, const string&s) :type(t), value(s) {} };
-struct CompositeLit     _E { Expr* litName{}; LitValue* litValue{}; CompositeLit(Expr*n, LitValue*v) :litName(n), litValue(v) {} };
+struct BasicLit         _E { TokenType type{}; string value; CTOR2(BasicLit, type, value) };
+struct CompositeLit     _E { Expr* litName{}; LitValue* litValue{}; CTOR2(CompositeLit,litName,litValue) };
 struct Name             _E { string name; };
 struct ArrayType        _E { Expr* len{}; Expr* elem{}; bool autoLen = false; };
 struct StructType       _E { vector<tuple<Expr*, Expr*, string, bool>> fields; };
-struct PtrType          _E { Expr* elem{}; PtrType(Expr*e) :elem(e) {} };
+struct PtrType          _E { Expr* elem{}; CTOR1(PtrType, elem) };
 struct ParamDecl           { bool isVariadic = false, hasName = false; Expr* type{}; string name; };
 struct Param               { vector<ParamDecl*> paramList; };
 struct Signature           { Param* param{}, *resultParam{}; Expr* resultType{}; };
-struct FuncType         _E { Signature * signature{};FuncType(Signature* s):signature(s){} };
+struct FuncType         _E { Signature * signature{}; CTOR1(FuncType,signature) };
 struct InterfaceType    _E { vector<tuple<Name*, Signature*>> method; };
 struct SliceType        _E { Expr* elem{}; };
 struct MapType          _E { Expr* type{}, *elem{}; };
@@ -508,8 +511,7 @@ const auto parse(const string & filename) {
             node = new VarSpec;
             node->identList = tmp;
             alternation(OP_AGN, [&] {node->exprList = parseExprList(t); },
-                [&] {node->type = parseType(t); option(OP_AGN, [&] {node->exprList = parseExprList(t); }); }
-            );
+                [&] {node->type = parseType(t); option(OP_AGN, [&] {node->exprList = parseExprList(t); }); });
         }
         return node;
     };
@@ -548,8 +550,7 @@ const auto parse(const string & filename) {
             node = new Param;
             repetition(OP_RPAREN, [&] {
                 if (auto * tmp = parseParamDecl(t); tmp != nullptr) { node->paramList.push_back(tmp); }
-                option(OP_COMMA, [] {});
-            });
+                option(OP_COMMA, [] {}); });
             for (int i = 0, rewriteStart = 0; i < node->paramList.size(); i++) {
                 if (dynamic_cast<ParamDecl*>(node->paramList[i])->hasName) {
                     for (int k = rewriteStart; k < i; k++) {
@@ -605,8 +606,7 @@ const auto parse(const string & filename) {
             nestLev--;
             t = next(f);
             dynamic_cast<ArrayType*>(node)->elem = parseType(t);
-        }
-        else {
+        } else {
             node = new SliceType;
             nestLev--;
             t = next(f);
@@ -624,10 +624,7 @@ const auto parse(const string & filename) {
                 get<1>(field) = parseType(t);
                 get<3>(field) = false;
             } else {
-                if (t.type == OP_MUL) {
-                    get<3>(field) = true;
-                    t = next(f);
-                }
+                option(OP_MUL, [&] {get<3>(field) = true;});
                 get<0>(field) = parseName(true, t);
             }
             if (t.type == LIT_STR) get<2>(field) = t.lexeme;
@@ -817,8 +814,7 @@ const auto parse(const string & filename) {
     auto parseSelectStmt = [&](Token&t) {
         eat(KW_select);eat(OP_LBRACE);
         auto* node = new SelectStmt;
-        repetition(OP_RBRACE,
-            [&] {if (auto*tmp = parseSelectCase(t); tmp != nullptr) node->caseList.push_back(tmp); });
+        repetition(OP_RBRACE,[&] {if (auto*tmp = parseSelectCase(t); tmp != nullptr) node->caseList.push_back(tmp); });
         return node;
     };
     auto parseForStmt = [&](Token&t){
