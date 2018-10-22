@@ -1,5 +1,11 @@
 package main 
 
+func initAtofOnce() {
+	if t.a != nil {
+		f.b = &NumError{"ParseFloat", test.in, test.err}
+	}
+}
+
 func f(a, b int, z float64, opt ...interface{}) (success bool)
 
 func a()(a,b,c float32,d... float32,...e)

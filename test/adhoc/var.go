@@ -1,5 +1,13 @@
 package main
 
+var tests = []struct {
+		val    interface{} // type as a value
+		_32bit uintptr     // size on 32bit platforms
+		_64bit uintptr     // size on 64bit platforms
+	}{
+		{runtime.G{}, 216, 376}, // g, but exported for testing
+	}
+
 var (
 	mbuckets  *bucket // memory profile buckets
 	bbuckets  *bucket // blocking profile buckets

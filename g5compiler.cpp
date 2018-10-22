@@ -850,7 +850,8 @@ const auto parse(const string & filename) {
             node->cond = parseExpr(t);
         }
         else node->cond = dynamic_cast<ExprStmt*>(tmp)->expr;
-
+        nestLev = outLev;
+        
         node->ifBlock = parseBlock(t);
         if (t.type == KW_else) {
             t = next(f);
@@ -858,7 +859,7 @@ const auto parse(const string & filename) {
             else if (t.type == OP_LBRACE)   node->elseBlock = parseBlock(t);
             else throw runtime_error("only else-if or else could place here");
         }
-        nestLev = outLev;
+        
         return node;
     };
     auto parseSwitchCase = [&](Token&t) {
@@ -888,12 +889,13 @@ const auto parse(const string & filename) {
             if (t.type == OP_SEMI) t = next(f);
             if (t.type != OP_LBRACE) node->cond = parseSimpleStmt(nullptr, t);
         }
+        nestLev = outLev;
+
         eat(OP_LBRACE);
         do {
             if (auto*tmp = parseSwitchCase(t); tmp != nullptr) node->caseList.push_back(tmp);
         } while (t.type != OP_RBRACE);
         t = next(f);
-        nestLev = outLev;
         return node;
     };
     auto parseSelectCase = [&](Token&t){
@@ -954,8 +956,8 @@ const auto parse(const string & filename) {
                 if (t.type != OP_LBRACE) node->post = parseSimpleStmt(nullptr, t);
             }
         }
-        node->block = parseBlock(t);
         nestLev = outLev;
+        node->block = parseBlock(t);
         return node;
     };
     parseStmt = [&](Token&t)->Stmt* {

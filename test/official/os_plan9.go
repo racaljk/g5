@@ -319,8 +319,8 @@ func osyield() {
 }
 
 //go:nosplit
-func usleep(µs uint32) {
-	ms := int32(µs / 1000)
+func usleep(us uint32) {
+	ms := int32(us / 1000)
 	if ms == 0 {
 		ms = 1
 	}

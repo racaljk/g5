@@ -493,8 +493,8 @@ func sysconf(name int32) int64 {
 func usleep1(usec uint32)
 
 //go:nosplit
-func usleep(µs uint32) {
-	usleep1(µs)
+func usleep(us uint32) {
+	usleep1(us)
 }
 
 //go:nosplit

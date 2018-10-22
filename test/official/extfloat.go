@@ -128,7 +128,7 @@ var powersOfTen = [...]extFloat{
 
 // floatBits returns the bits of the float64 that best approximates
 // the extFloat passed as receiver. Overflow is set to true if
-// the resulting float64 is ±Inf.
+// the resulting float64 is ��Inf.
 func (f *extFloat) floatBits(flt *floatInfo) (bits uint64, overflow bool) {
 	f.Normalize()
 
@@ -156,7 +156,7 @@ func (f *extFloat) floatBits(flt *floatInfo) (bits uint64, overflow bool) {
 
 	// Infinities.
 	if exp-flt.bias >= 1<<flt.expbits-1 {
-		// ±Inf
+		// ��Inf
 		mant = 0
 		exp = 1<<flt.expbits - 1 + flt.bias
 		overflow = true
@@ -374,7 +374,7 @@ func (f *extFloat) FixedDecimal(d *decimalSlice, n int) bool {
 	shift := uint(-f.exp)
 	integer := uint32(f.mant >> shift)
 	fraction := f.mant - (uint64(integer) << shift)
-	ε := uint64(1) // ε is the uncertainty we have on the mantissa of f.
+	x := uint64(1) // x is the uncertainty we have on the mantissa of f.
 
 	// Write exactly n digits to d.
 	needed := n        // how many digits are left to write.
@@ -423,8 +423,8 @@ func (f *extFloat) FixedDecimal(d *decimalSlice, n int) bool {
 		// fits in a uint64 without overflow.
 		for needed > 0 {
 			fraction *= 10
-			ε *= 10 // the uncertainty scales as we multiply by ten.
-			if 2*ε > 1<<shift {
+			x *= 10 // the uncertainty scales as we multiply by ten.
+			if 2*x > 1<<shift {
 				// the error is so large it could modify which digit to write, abort.
 				return false
 			}
@@ -443,16 +443,16 @@ func (f *extFloat) FixedDecimal(d *decimalSlice, n int) bool {
 	//
 	// If rest > 0, the amount is:
 	//    (rest<<shift | fraction) / (pow10 << shift)
-	//    fraction being known with a ±ε uncertainty.
+	//    fraction being known with a ��x uncertainty.
 	//    The fact that n > 0 guarantees that pow10 << shift does not overflow a uint64.
 	//
 	// If rest = 0, pow10 == 1 and the amount is
 	//    fraction / (1 << shift)
-	//    fraction being known with a ±ε uncertainty.
+	//    fraction being known with a ��x uncertainty.
 	//
 	// We pass this information to the rounding routine for adjustment.
 
-	ok := adjustLastDigitFixed(d, uint64(rest)<<shift|fraction, pow10, shift, ε)
+	ok := adjustLastDigitFixed(d, uint64(rest)<<shift|fraction, pow10, shift, x)
 	if !ok {
 		return false
 	}
@@ -468,23 +468,23 @@ func (f *extFloat) FixedDecimal(d *decimalSlice, n int) bool {
 
 // adjustLastDigitFixed assumes d contains the representation of the integral part
 // of some number, whose fractional part is num / (den << shift). The numerator
-// num is only known up to an uncertainty of size ε, assumed to be less than
+// num is only known up to an uncertainty of size x, assumed to be less than
 // (den << shift)/2.
 //
 // It will increase the last digit by one to account for correct rounding, typically
-// when the fractional part is greater than 1/2, and will return false if ε is such
+// when the fractional part is greater than 1/2, and will return false if x is such
 // that no correct answer can be given.
-func adjustLastDigitFixed(d *decimalSlice, num, den uint64, shift uint, ε uint64) bool {
+func adjustLastDigitFixed(d *decimalSlice, num, den uint64, shift uint, x uint64) bool {
 	if num > den<<shift {
 		panic("strconv: num > den<<shift in adjustLastDigitFixed")
 	}
-	if 2*ε > den<<shift {
-		panic("strconv: ε > (den<<shift)/2")
+	if 2*x > den<<shift {
+		panic("strconv: x > (den<<shift)/2")
 	}
-	if 2*(num+ε) < den<<shift {
+	if 2*(num+x) < den<<shift {
 		return true
 	}
-	if 2*(num-ε) > den<<shift {
+	if 2*(num-x) > den<<shift {
 		// increment d by 1.
 		i := d.nd - 1
 		for ; i >= 0; i-- {
@@ -619,10 +619,10 @@ func (f *extFloat) ShortestDecimal(d *decimalSlice, lower, upper *extFloat) bool
 	}
 }
 
-// adjustLastDigit modifies d = x-currentDiff*ε, to get closest to
-// d = x-targetDiff*ε, without becoming smaller than x-maxDiff*ε.
-// It assumes that a decimal digit is worth ulpDecimal*ε, and that
-// all data is known with an error estimate of ulpBinary*ε.
+// adjustLastDigit modifies d = x-currentDiff*x, to get closest to
+// d = x-targetDiff*x, without becoming smaller than x-maxDiff*x.
+// It assumes that a decimal digit is worth ulpDecimal*x, and that
+// all data is known with an error estimate of ulpBinary*x.
 func adjustLastDigit(d *decimalSlice, currentDiff, targetDiff, maxDiff, ulpDecimal, ulpBinary uint64) bool {
 	if ulpDecimal < 2*ulpBinary {
 		// Approximation is too wide.
