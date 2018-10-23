@@ -86,13 +86,12 @@ struct AssignStmt       _S { ExprList* lhs{}, *rhs{}; TokenType op{}; CTOR3(Assi
 struct SAssignStmt      _S { vector<string> lhs{}; ExprList* rhs{}; CTOR2(SAssignStmt,lhs,rhs) };
 // Expression
 struct SelectorExpr     _E { Expr* operand{}; string selector; CTOR2(SelectorExpr, operand, selector) };
-struct TypeSwitchExpr   _E { Expr* operand{}; CTOR1(TypeSwitchExpr,operand) };
-struct TypeAssertExpr   _E { Expr* operand{}, *type{}; CTOR2(TypeAssertExpr,operand,type) };
-struct IndexExpr        _E { Expr* operand{}, *index{}; CTOR2(IndexExpr, operand, index) };
+struct TypeSwitchExpr   _E { Expr* operand{}; CTOR1(TypeSwitchExpr, operand) };
+struct IndexExpr        _E { Expr* operand{}, *index{}; CTOR2(IndexExpr, operand,index) };
+struct TypeAssertExpr   _E { Expr* operand{}, *type{}; CTOR2(TypeAssertExpr, operand, type) };
 struct SliceExpr        _E { Expr* operand{}, *begin{}, *end{}, *step{}; };
 struct CallExpr         _E { Expr* operand{}, *type{}; ExprList* arguments{}; bool isVariadic{}; };
-struct KeyedElement        { Expr*key{}, *elem{}; };
-struct LitValue         _E { vector<KeyedElement*> keyedElement; };
+struct LitValue         _E { vector<tuple<Expr*,Expr*>> keyedElement; };
 struct BasicLit         _E { TokenType type{}; string value; CTOR2(BasicLit, type, value) };
 struct CompositeLit     _E { Expr* litName{}; LitValue* litValue{}; CTOR2(CompositeLit,litName,litValue) };
 struct Name             _E { string name; };
@@ -948,11 +947,11 @@ const auto parse(const string & filename) {
         return nullptr;
     };
     auto parseKeyedElement = [&](Token&t){
-        auto*node = new KeyedElement;
-        node->elem = (t.type == OP_LBRACE) ? parseLitValue(t) : parseExpr(t); 
+        Expr* elem{}, *key{};
+        elem = (t.type == OP_LBRACE) ? parseLitValue(t) : parseExpr(t);
         option(OP_COLON, 
-            [&] {node->key = node->elem; node->elem = (t.type == OP_LBRACE) ? parseLitValue(t) : parseExpr(t); });
-        return node;
+            [&] {key = elem; elem = (t.type == OP_LBRACE) ? parseLitValue(t) : parseExpr(t); });
+        return make_tuple(key,elem);
     };
     parseLitValue = [&](Token&t)->LitValue* {
         LitValue*node{};
@@ -987,10 +986,6 @@ const auto parse(const string & filename) {
     }
     return node;
 }
-
-void emitStub() {}
-
-void runtimeStub() {}
 
 //===---------------------------------------------------------------------------------------===//
 // debug auxiliary functions, they are not part of 5 functions

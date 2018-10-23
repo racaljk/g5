@@ -12,8 +12,8 @@ endif()
 set(SOURCE_FILES g5compiler.cpp)
 add_executable(g5 ${SOURCE_FILES})
 
-file(GLOB TEST1 ${PROJECT_SOURCE_DIR}/test/adhoc/*.go)
-file(GLOB TEST2 ${PROJECT_SOURCE_DIR}/test/official/*.go)
+file(GLOB TEST1 ${PROJECT_SOURCE_DIR}/test/parser/adhoc/*.go)
+file(GLOB TEST2 ${PROJECT_SOURCE_DIR}/test/parser/official/*.go)
 
 enable_testing()
 foreach(s ${TEST1})
