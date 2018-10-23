@@ -54,17 +54,15 @@ enum TokenType : signed int {
 #define CTOR2(NAME,FD1,FD2)     NAME(decltype(FD1) FD1, decltype(FD2) FD2):FD1(FD1),FD2(FD2){}
 #define CTOR3(NAME,FD1,FD2,FD3) NAME(decltype(FD1) FD1, decltype(FD2) FD2, decltype(FD3) FD3)\
                                 :FD1(FD1),FD2(FD2),FD3(FD3){}
+// Common
 struct Node                { virtual ~Node() = default; };
 struct Expr             _N {};
 struct Stmt             _N {};
-struct BasicExpr        _E { Expr*lhs{}, *rhs{}; TokenType op{}; };
-struct IdentList        _E { vector<string> identList; };
-struct ExprList         _E { vector<Expr*> exprList; };
-struct StmtList         _E { vector<Stmt*> stmtList; };
+struct ExprList         _E { vector<Expr*> exprs; };
+struct StmtList         _S { vector<Stmt*> stmts; };    // the concept of **block**
 // Statement
-struct BlockStmt        _S { StmtList* stmtList{}; };
 struct GoStmt           _S { Expr* expr{}; CTOR1(GoStmt, expr) };
-struct ReturnStmt       _S { ExprList* exprList{}; CTOR1(ReturnStmt,exprList) };
+struct ReturnStmt       _S { ExprList* exprs{}; CTOR1(ReturnStmt,exprs) };
 struct BreakStmt        _S { string label; CTOR1(BreakStmt, label) };
 struct DeferStmt        _S { Expr* expr{}; CTOR1(DeferStmt, expr) };
 struct ContinueStmt     _S { string label; CTOR1(ContinueStmt, label) };
@@ -72,11 +70,9 @@ struct GotoStmt         _S { string label; CTOR1(GotoStmt, label) };
 struct FallthroughStmt  _S {};
 struct LabeledStmt      _S { string label; Stmt* stmt{}; CTOR2(LabeledStmt,label,stmt)};
 struct IfStmt           _S { Stmt* init{}, *ifBlock{}, *elseBlock{}; Expr* cond{}; };
-struct SwitchCase          { ExprList* exprList{}; StmtList* stmtList{}; };
-struct SwitchStmt       _S { Stmt* init{}, *cond{}; vector<SwitchCase*> caseList{}; };
-struct SelectCase          {StmtList* stmtList{};};
-struct SelectStmt       _S {vector<SelectCase*> caseList;};
-struct ForStmt          _S { Node* init{}, *cond{}, *post{}; BlockStmt* block{}; };
+struct SwitchStmt       _S { Stmt* init{}, *cond{}; vector<tuple<ExprList*,StmtList*>> caseList{}; };
+struct SelectStmt       _S { vector<tuple<Stmt*,StmtList*>> caseList;};
+struct ForStmt          _S { Node* init{}, *cond{}, *post{}; StmtList* block{}; };
 struct SRangeClause     _S { vector<string> lhs; Expr* rhs{}; CTOR2(SRangeClause, lhs, rhs) };
 struct RangeClause      _S { ExprList* lhs{}; TokenType op; Expr* rhs{}; CTOR3(RangeClause,lhs,op,rhs)};
 struct ExprStmt         _S { Expr* expr{}; CTOR1(ExprStmt,expr) };
@@ -85,6 +81,7 @@ struct IncDecStmt       _S { Expr* expr{}; bool isInc{}; CTOR2(IncDecStmt, expr,
 struct AssignStmt       _S { ExprList* lhs{}, *rhs{}; TokenType op{}; CTOR3(AssignStmt,lhs,op,rhs) };
 struct SAssignStmt      _S { vector<string> lhs{}; ExprList* rhs{}; CTOR2(SAssignStmt,lhs,rhs) };
 // Expression
+struct BasicExpr        _E { Expr*lhs{}, *rhs{}; TokenType op{}; };
 struct SelectorExpr     _E { Expr* operand{}; string selector; CTOR2(SelectorExpr, operand, selector) };
 struct TypeSwitchExpr   _E { Expr* operand{}; CTOR1(TypeSwitchExpr, operand) };
 struct IndexExpr        _E { Expr* operand{}, *index{}; CTOR2(IndexExpr, operand,index) };
@@ -96,7 +93,7 @@ struct BasicLit         _E { TokenType type{}; string value; CTOR2(BasicLit, typ
 struct CompositeLit     _E { Expr* litName{}; LitValue* litValue{}; CTOR2(CompositeLit,litName,litValue) };
 struct Name             _E { string name; };
 struct ArrayType        _E { Expr* len{}; Expr* elem{}; bool autoLen = false; };
-struct StructType       _E { vector<tuple<Expr*, Expr*, string, bool>> fields; };
+struct StructType       _E { vector<tuple<vector<string>, Expr*, string, bool>> fields; };
 struct PtrType          _E { Expr* elem{}; CTOR1(PtrType, elem) };
 struct ParamDecl           { bool isVariadic = false, hasName = false; Expr* type{}; string name; };
 struct Param               { vector<ParamDecl*> paramList; };
@@ -108,13 +105,12 @@ struct MapType          _E { Expr* type{}, *elem{}; };
 struct ChanType         _E { Expr* elem{}; };
 // Declaration
 struct ImportDecl          { map<string, string> imports; };
-struct ConstDecl        _S { vector<IdentList*> identList; vector<Expr*> type; vector<ExprList*> exprList; };
-struct TypeSpec            { string ident; Expr* type; };
-struct TypeDecl         _S { vector<TypeSpec*> typeSpec; };
-struct VarSpec             { IdentList* identList{}; ExprList* exprList{}; Expr* type{}; };
+struct ConstDecl        _S { vector<vector<string>> idents; vector<Expr*> type; vector<ExprList*> exprs; };
+struct TypeDecl         _S { vector<tuple< string,Expr*>> typeSpec; };
+struct VarSpec             { vector<string> idents{}; ExprList* exprs{}; Expr* type{}; };
 struct VarDecl          _S { vector<VarSpec*> varSpec; };
 // Freak
-struct FuncDecl:public Stmt,Expr{ string funcName;Param* receiver{};Signature* signature{};BlockStmt* funcBody{};};
+struct FuncDecl:public Stmt,Expr{ string funcName;Param* receiver{};Signature* signature{};StmtList* funcBody{};};
 struct CompilationUnit {
     string package;
     vector<ImportDecl*> importDecl;
@@ -386,26 +382,25 @@ const auto parse(const string & filename) {
         return node;
     };
     auto parseIdentList = [&](Token&t) {
-        IdentList* node{};
+        vector<string> idents;
         option(TK_ID, [&] {
-            node = new  IdentList;
-            node->identList.emplace_back(t.lexeme);
+            idents.emplace_back(t.lexeme);
             while (t.type == OP_COMMA) {
                 t = next(f);
-                node->identList.emplace_back(t.lexeme);
+                idents.emplace_back(t.lexeme);
                 t = next(f);
             }
         });
-        return node;
+        return idents;
     };
     auto parseExprList = [&](Token&t) {
         ExprList* node{};
         if (auto* tmp = parseExpr(t); tmp != nullptr) {
             node = new  ExprList;
-            node->exprList.emplace_back(tmp);
+            node->exprs.emplace_back(tmp);
             while (t.type == OP_COMMA) {
                 t = next(f);
-                node->exprList.emplace_back(parseExpr(t));
+                node->exprs.emplace_back(parseExpr(t));
             }
         }
         return node;
@@ -415,16 +410,15 @@ const auto parse(const string & filename) {
         Stmt* tmp = nullptr;
         while ((tmp = parseStmt(t))) {
             if (node == nullptr) node = new StmtList;
-            node->stmtList.push_back(tmp);
+            node->stmts.push_back(tmp);
             option(OP_SEMI,[]{});
         }
         return node;
     };
     auto parseBlock = [&](Token&t){
-        BlockStmt * node{};
+        StmtList * node{};
         option(OP_LBRACE, [&] {
-            node = new BlockStmt;
-            alternation(OP_RBRACE, [&] {}, [&] {node->stmtList = parseStmtList(t); eat(OP_RBRACE); });});
+            alternation(OP_RBRACE, [&] {}, [&] {node = parseStmtList(t); eat(OP_RBRACE); });});
         return node;
     };
 #pragma endregion
@@ -463,32 +457,32 @@ const auto parse(const string & filename) {
         auto * node = new ConstDecl;
         eat(KW_const);
         alternation(OP_LPAREN, [&] {repetition(OP_RPAREN, [&] {
-            node->identList.push_back(parseIdentList(t));
+            node->idents.push_back(parseIdentList(t));
             if (auto*tmp = parseType(t); tmp != nullptr)
                 node->type.push_back(tmp);
             else
                 node->type.push_back(nullptr);
-            alternation(OP_AGN, [&] {node->exprList.push_back(parseExprList(t)); }, [&] {node->exprList.push_back(nullptr); });
+            alternation(OP_AGN, [&] {node->exprs.push_back(parseExprList(t)); }, [&] {node->exprs.push_back(nullptr); });
             option(OP_SEMI, [] {});
         });}, [&] {
-            node->identList.push_back(parseIdentList(t));
+            node->idents.push_back(parseIdentList(t));
             if (auto*tmp = parseType(t); tmp != nullptr)    node->type.push_back(tmp);
             else                                           node->type.push_back(nullptr);
-            alternation(OP_AGN, [&] {node->exprList.push_back(parseExprList(t)); }, [&] {node->exprList.push_back(nullptr); });
+            alternation(OP_AGN, [&] {node->exprs.push_back(parseExprList(t)); }, [&] {node->exprs.push_back(nullptr); });
             if (t.type != OP_SEMI) G_ERROR("syntax error", "expect an explicit semicolon");
         });
         return node;
     };
     auto parseTypeSpec = [&](Token&t) {
-        TypeSpec* node{};
+        string ident;
+        Expr* type;
         if (t.type == TK_ID) {
-            node = new TypeSpec;
-            node->ident = t.lexeme;
+            ident = t.lexeme;
             t = next(f);
             option(OP_AGN, [] {});
-            node->type = parseType(t);
+            type = parseType(t);
         }
-        return node;
+        return make_tuple(ident,type);
     };
     auto parseTypeDecl = [&](Token&t) {
         auto * node = new TypeDecl;
@@ -500,11 +494,11 @@ const auto parse(const string & filename) {
     };
     auto parseVarSpec = [&](Token&t){
         VarSpec* node{};
-        if (auto*tmp = parseIdentList(t); tmp != nullptr) {
+        if (auto tmp = parseIdentList(t); !tmp.empty()) {
             node = new VarSpec;
-            node->identList = tmp;
-            alternation(OP_AGN, [&] {node->exprList = parseExprList(t); },
-                [&] {node->type = parseType(t); option(OP_AGN, [&] {node->exprList = parseExprList(t); }); });
+            node->idents = tmp;
+            alternation(OP_AGN, [&] {node->exprs = parseExprList(t); },
+                [&] {node->type = parseType(t); option(OP_AGN, [&] {node->exprs = parseExprList(t); }); });
         }
         return node;
     };
@@ -607,14 +601,16 @@ const auto parse(const string & filename) {
         auto * node = new  StructType;
         eat(KW_struct); option(OP_SEMI, [] {}); eat(OP_LBRACE);
         repetition(OP_RBRACE, [&] {
-            tuple<Expr*, Expr*, string, bool> field;// <IdentList/Name,Type,Tag,isEmbeded>
-            if (auto * tmp = parseIdentList(t); tmp != nullptr) {
+            tuple<vector<string>, Expr*, string, bool> field;// <IdentList/Name,Type,Tag,isEmbeded>
+            if (auto tmp = parseIdentList(t); !tmp.empty()) {
                 get<0>(field) = tmp;
                 get<1>(field) = parseType(t);
                 get<3>(field) = false;
             } else {
                 option(OP_MUL, [&] {get<3>(field) = true;});
-                get<0>(field) = parseName(true, t);
+                auto tmpName = parseName(true, t);
+                get<0>(field).push_back(tmpName != nullptr ? tmpName->name : "");
+                delete tmpName;
             }
             if (t.type == LIT_STR) get<2>(field) = t.lexeme;
             node->fields.push_back(field);
@@ -673,23 +669,23 @@ const auto parse(const string & filename) {
         }
         if (lhs == nullptr) lhs = parseExprList(t);
         switch (t.type) {
-        case OP_CHAN:           {t = next(f); return new SendStmt{ lhs->exprList[0],parseExpr(t) }; }
-        case OP_INC:case OP_DEC:{auto tmp = t.type; t = next(f); return new IncDecStmt{lhs->exprList[0],tmp==OP_INC}; }
+        case OP_CHAN:           {t = next(f); return new SendStmt{ lhs->exprs[0],parseExpr(t) }; }
+        case OP_INC:case OP_DEC:{auto tmp = t.type; t = next(f); return new IncDecStmt{lhs->exprs[0],tmp==OP_INC}; }
         case OP_SHORTAGN: {
-            vector<string> identList;
-            for (auto* e : lhs->exprList) {
+            vector<string> idents;
+            for (auto* e : lhs->exprs) {
                 string identName = dynamic_cast<Name*>(dynamic_cast<BasicExpr*>(e)->lhs)->name;
-                identList.push_back(identName);
+                idents.push_back(identName);
             }
             t = next(f);
             Stmt* stmt{};
-            alternation(KW_range,[&] {stmt = new SRangeClause{ move(identList), parseExpr(t) }; },
-                [&] {stmt = new SAssignStmt{ move(identList) ,parseExprList(t) }; });
+            alternation(KW_range,[&] {stmt = new SRangeClause{ move(idents), parseExpr(t) }; },
+                [&] {stmt = new SAssignStmt{ move(idents) ,parseExprList(t) }; });
             return stmt;
         }
         case OP_ADDAGN:case OP_SUBAGN:case OP_ORAGN:case OP_XORAGN:case OP_MULAGN:case OP_DIVAGN:
         case OP_MODAGN:case OP_LSFTAGN:case OP_RSFTAGN:case OP_ANDAGN:case OP_ANDXORAGN:case OP_AGN: {
-            if (lhs->exprList.empty()) throw runtime_error("one expr required");
+            if (lhs->exprs.empty()) throw runtime_error("one expr required");
             auto op = t.type;
             t = next(f);
             Stmt* stmt{};
@@ -697,7 +693,7 @@ const auto parse(const string & filename) {
                 [&] {stmt = new AssignStmt{ lhs,op,parseExprList(t)}; });
             return stmt;
         }
-        default: {return new ExprStmt{ lhs->exprList[0] }; }//ExprStmt
+        default: {return new ExprStmt{ lhs->exprs[0] }; }//ExprStmt
         }
     };
     parseIfStmt = [&](Token&t)->IfStmt* {
@@ -720,20 +716,19 @@ const auto parse(const string & filename) {
         return node;
     };
     auto parseSwitchCase = [&](Token&t) {
-        SwitchCase* node{};
+        ExprList*exprs{}; 
+        StmtList*stmts{};
         if (t.type == KW_case) {
-            node = new SwitchCase;
             t = next(f);
-            node->exprList = parseExprList(t);
+            exprs = parseExprList(t);
             eat(OP_COLON);
-            node->stmtList = parseStmtList(t);
+            stmts = parseStmtList(t);
         } else if (t.type == KW_default) {
-            node = new SwitchCase;
             t = next(f);
             eat(OP_COLON);
-            node->stmtList = parseStmtList(t);
+            stmts = parseStmtList(t);
         }
-        return node;
+        return make_tuple(exprs, stmts);
     };
     auto parseSwitchStmt = [&](Token&t) {
         const int outLev = nestLev;
@@ -747,30 +742,32 @@ const auto parse(const string & filename) {
         nestLev = outLev;
 
         eat(OP_LBRACE);
-        repetition(OP_RBRACE, 
-            [&] {if (auto*tmp = parseSwitchCase(t); tmp != nullptr) node->caseList.push_back(tmp); });
+        repetition(OP_RBRACE, [&] {
+            if (auto[cond, stmts] = parseSwitchCase(t); /*cond could null*/stmts != nullptr)
+                node->caseList.emplace_back(cond,stmts); });
         return node;
     };
     auto parseSelectCase = [&](Token&t){
-        SelectCase* node{};
+        Stmt*cond{}; StmtList* stmts{};
         if (t.type == KW_case) {
-            node = new SelectCase;
             t = next(f);
-            auto*tmp = parseSimpleStmt(nullptr, t);
+            cond = parseSimpleStmt(nullptr, t);
             eat(OP_COLON);
-            node->stmtList = parseStmtList(t);
+            stmts = parseStmtList(t);
         } else if (t.type == KW_default) {
-            node = new SelectCase;
             t = next(f);
             eat(OP_COLON);
-            node->stmtList = parseStmtList(t);
+            stmts = parseStmtList(t);
         }
-        return node;
+        return make_tuple(cond, stmts);
     };
     auto parseSelectStmt = [&](Token&t) {
         eat(OP_LBRACE);
         auto* node = new SelectStmt;
-        repetition(OP_RBRACE,[&] {if (auto*tmp = parseSelectCase(t); tmp != nullptr) node->caseList.push_back(tmp); });
+        repetition(OP_RBRACE,[&] {
+            if (auto[cond,stmts] = parseSelectCase(t); /*cond could null*/stmts != nullptr) 
+                node->caseList.emplace_back(cond,stmts); 
+        });
         return node;
     };
     auto parseForStmt = [&](Token&t){
@@ -827,11 +824,11 @@ const auto parse(const string & filename) {
         case LIT_STR:case LIT_INT:case LIT_IMG:case LIT_FLOAT:case LIT_RUNE:
         case KW_func:case KW_struct:case KW_map:case OP_LBRACKET:case TK_ID: case OP_LPAREN:{
             // It shall a labeled statement(not part of simple stmt so we handle it here)
-            auto* exprList = parseExprList(t);
+            auto* exprs = parseExprList(t);
             Stmt*result{};
             alternation(OP_COLON, [&] { result = new LabeledStmt(dynamic_cast<Name*>(
-                dynamic_cast<BasicExpr*>(exprList->exprList[0])->lhs)->name,parseStmt(t));
-            }, [&] {result = parseSimpleStmt(exprList, t); });
+                dynamic_cast<BasicExpr*>(exprs->exprs[0])->lhs)->name,parseStmt(t));
+            }, [&] {result = parseSimpleStmt(exprs, t); });
             return result;
         }
         }
@@ -986,6 +983,15 @@ const auto parse(const string & filename) {
     }
     return node;
 }
+void codegen(const CompilationUnit*const tree) {
+    for (auto&func : tree->funcDecl) {
+        if (func->funcName == "main" && func->receiver == nullptr && func->funcBody != nullptr) {
+            for (auto&mainStmt : func->funcBody->stmts) {
+
+            }
+        }
+    }
+}
 
 //===---------------------------------------------------------------------------------------===//
 // debug auxiliary functions, they are not part of 5 functions
@@ -1003,5 +1009,6 @@ int main(int argc, char *argv[]) {
     //printLex(argv[1]);
     const CompilationUnit* ast = parse(argv[1]);
     cout << "parsing passed\n";
+    codegen(ast);
     return 0;
 }

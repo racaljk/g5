@@ -14,6 +14,8 @@ add_executable(g5 ${SOURCE_FILES})
 
 file(GLOB TEST1 ${PROJECT_SOURCE_DIR}/test/parser/adhoc/*.go)
 file(GLOB TEST2 ${PROJECT_SOURCE_DIR}/test/parser/official/*.go)
+file(GLOB TEST3 ${PROJECT_SOURCE_DIR}/test/codegen/*.go)
+
 
 enable_testing()
 foreach(s ${TEST1})
@@ -24,4 +26,9 @@ endforeach()
 foreach(s ${TEST2})
     get_filename_component(curated ${s} NAME_WE)
     add_test(NAME official_${curated} COMMAND g5  ${s})
+endforeach()
+
+foreach(s ${TEST3})
+    get_filename_component(curated ${s} NAME_WE)
+    add_test(NAME codegen_${curated} COMMAND g5  ${s})
 endforeach()
