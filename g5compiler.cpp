@@ -167,6 +167,7 @@ skip_comment_and_find_next:
     }
     // decimal 
     if (c >= '0'&&c <= '9' || c == '.') {
+        TokenType type = LIT_INT;
         if (c == '0') {
             lexeme += consumePeek(c);
             if (c == 'x' || c == 'X') {
@@ -187,7 +188,6 @@ skip_comment_and_find_next:
             goto may_float;
         } else {  // 1-9 or . or just a single 0
         may_float:
-            TokenType type = LIT_INT;
             if (c == '.') {
                 lexeme += consumePeek(c);
                 if (c == '.') {
